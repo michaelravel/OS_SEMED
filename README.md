@@ -1,52 +1,46 @@
-# DIRLOGISTICA - Gestao de Ordens de Servico
+# OS SEMED — SIGMA
 
-Aplicacao web local criada a partir das planilhas exportadas do AppSheet no arquivo `DIRLOGISTICA-314837652-20260513T161018Z-3-001.zip`.
+Sistema de ordens de serviço em **Next.js, TypeScript, Supabase e Vercel**, com a identidade visual do SIGMA.
 
-## Como abrir
+## Desenvolvimento
 
-Abra o arquivo `index.html` no navegador.
+Requer Node.js 24.
 
-Usuarios de demonstracao:
+```sh
+npm ci
+npm run dev
+```
 
-- `admin@dirlogistica.local`
-- `solicitante@dirlogistica.local`
-- `tecnico@dirlogistica.local`
-- `gestor@dirlogistica.local`
+Copie .env.example para .env.local e configure a chave publishable do projeto Supabase. A aplicação permanece bloqueada sem configuração; não usa contas demo como autenticação.
 
-Senha para todos: `admin123`
+## Verificação
 
-## O que esta implementado
+```sh
+npm run typecheck
+npm run lint
+npm test
+npm run build
+```
 
-- Login com perfis demonstrativos.
-- Dashboard com totalizadores e indicadores por status, area e rota.
-- Listagem de ordens de servico com filtros.
-- Criacao e edicao de OS.
-- Estabelecimento vinculado ao usuario, com alteracao permitida apenas ao administrador.
-- Selecao em cascata baseada no CSV de logistica: area de solicitacao filtra natureza, natureza filtra tipo, tipo filtra descricao e descricao filtra detalhamento.
-- Responsavel definido automaticamente pela area de solicitacao, com cadastro na tela Usuarios.
-- Status bloqueado para solicitantes; apenas administrador ou responsavel da OS pode alterar.
-- Upload de anexos no formulario de OS para imagens, PDFs, documentos, planilhas e outros arquivos.
-- Gestao de usuarios para administrador, com adicionar, editar, excluir/reativar, alterar nome, e-mail, perfil, estabelecimento e foto de perfil.
-- Gestao de perfis com regras: solicitante ve apenas suas OS, responsavel ve apenas OS destinadas a ele e altera status, gestor visualiza tudo sem alterar, administrador visualiza e altera tudo.
-- Perfil Equipe Logistica removido.
-- Status de OS e historico de alteracoes.
-- Mensagens internas por OS.
-- Cadastros de unidades, logistica, rotas, veiculos, motoristas e usuarios.
-- Formularios de novo/editar em paginas dedicadas para unidades, logistica, rotas, veiculos, motoristas e usuarios.
-- Exclusao logica por ativo/inativo nos cadastros.
-- Dados iniciais importados das planilhas `ABERTURA_OS`, `LOGISTICA`, `UNIDADES`, `ROTAS`, `VEICULOS` e `MOTORISTAS`.
+## Migração e implantação
+
+Consulte [o guia completo](docs/migracao-next-supabase.md) antes de aplicar o SQL ou importar registros no destino.
+
+- `npm run data:prepare` converte as fontes locais e gera um relatório privado.
+- Migration: `supabase/migrations/202609230001_os_semed.sql`.
+- Inspeção remota, somente leitura: `supabase/preflight.sql`.
+- A aplicação usa apenas URL e chave publishable; a chave administrativa é exclusiva do importador local.
+- Não publique payloads, fontes ou chaves como arquivos estáticos.
+
+A preparação local não significa que o banco remoto foi migrado ou que a Vercel foi publicada. Dados existentes apenas nos navegadores e arquivos de anexos ausentes precisam ser recuperados antes da conciliação final.
 
 ## Estrutura
 
-- `index.html`: entrada da aplicacao.
-- `styles.css`: interface responsiva.
-- `app.js`: regras de tela, filtros, formularios e persistencia local.
-- `assets/seed-data.js`: dados extraidos das planilhas.
-- `source-data/`: planilhas originais extraidas do ZIP.
-- `source-data/DIRLOGISTICA-314837652/LOGISTICA - LOGISTICA.csv`: fonte usada para a cascata de filtros da logistica.
-- `scripts/extract-xlsx-data.ps1`: rotina de extracao dos dados das planilhas.
-- `docs/technical-plan.md`: modelo de dados, arquitetura e evolucao para producao.
+- `src/app`: páginas, ações de servidor e download autorizado.
+- `src/components`: interface SIGMA e formulários.
+- `src/lib`: sessão, validação, domínio e tipos de banco.
+- `supabase`: schema, RLS, funções e preflight.
+- `scripts`: conversão/importação e testes legados.
+- `tests`: importação e testes SQL/RLS em PostgreSQL WASM.
 
-## Observacoes
-
-Esta entrega e um prototipo funcional sem dependencias externas, usando armazenamento local do navegador. Para producao, a recomendacao e evoluir para backend Node.js, banco PostgreSQL, Prisma, JWT e upload seguro de arquivos.
+O protótipo original foi preservado na raiz como referência; não é servido pelo Next.js. A documentação anterior está em [legacy-readme.md](docs/legacy-readme.md). Não usar o login local demonstrativo para produção.

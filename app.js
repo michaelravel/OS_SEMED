@@ -14,7 +14,7 @@ const statuses = [
 const demoUsers = [
   { id: "u-admin", name: "Administrador", email: "admin@dirlogistica.local", password: "admin", role: "Administrador", unit: "" },
   { id: "u-solicitante", name: "Solicitante", email: "solicitante@dirlogistica.local", password: "admin123", role: "Solicitante", unit: "" },
-  { id: "u-tecnico", name: "Responsável Técnico", email: "tecnico@dirlogistica.local, password: "admin123", role: "Responsável", unit: "" },
+  { id: "u-tecnico", name: "Responsável Técnico", email: "tecnico@dirlogistica.local", password: "admin123", role: "Responsável", unit: "" },
   { id: "u-gestor", name: "Gestor Consulta", email: "gestor@dirlogistica.local", password: "admin123", role: "Gestor/Consulta", unit: "" },
 ];
 
