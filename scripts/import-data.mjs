@@ -25,8 +25,8 @@ const payload = JSON.parse(
 for (const table of [
   "os_units",
   "os_catalogs",
-  "os_orders",
   "os_import_records",
+  "os_orders",
 ]) {
   const rows = payload[table];
   if (!Array.isArray(rows)) throw new Error(`Payload ausente: ${table}`);

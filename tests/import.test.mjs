@@ -22,7 +22,11 @@ test("todos os registros do seed são preservados sem inferir identidade/status"
     assert.equal(o.status, "A conferir");
     assert.equal(o.opened_by, null);
     assert.equal(o.responsible_id, null);
+    assert.equal(o.import_source, "seed/ABERTURA_OS");
+    assert.equal(o.import_source_id, o.legacy_id);
   }
+  assert.equal(result.orders.filter((o) => o.category_id).length, 4);
+  assert.equal(result.orders.filter((o) => !o.category_id).length, 1);
   assert.equal(
     new Set(
       [...result.units, ...result.catalogs, ...result.orders].map((r) => r.id),

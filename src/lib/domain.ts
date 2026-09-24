@@ -85,6 +85,17 @@ export type Order = {
   opened_by: string | null;
   responsible_id: string | null;
   category_id: string | null;
+  category_kind: "logistics";
+  driver_id: string | null;
+  driver_kind: "drivers";
+  vehicle_id: string | null;
+  vehicle_kind: "vehicles";
+  route_id: string | null;
+  route_kind: "routes";
+  requester_membership_id: string | null;
+  responsible_membership_id: string | null;
+  import_source: string | null;
+  import_source_id: string | null;
   details: Record<string, string>;
   created_at: string;
   opened_at: string | null;
@@ -102,9 +113,9 @@ export const orderSchema = z.object({
   occurred_at: z.string().max(30),
   has_material: z.enum(["Não informado", "Sim", "Não"]),
   police_report: z.string().trim().max(200),
-  driver: z.string().max(300),
-  vehicle: z.string().max(300),
-  route: z.string().max(300),
+  driver: z.union([z.literal(""), z.uuid()]),
+  vehicle: z.union([z.literal(""), z.uuid()]),
+  route: z.union([z.literal(""), z.uuid()]),
 });
 export function isAdmin(memberships: Membership[]) {
   return memberships.some(

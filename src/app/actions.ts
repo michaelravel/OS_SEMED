@@ -40,18 +40,26 @@ export async function login(form: FormData) {
   redirect("/painel");
 }
 export async function logout() {
-  if (configured()) {
-    const db = await supabase();
-    const { error } = await db.auth.signOut();
-    if (error) failed("/painel");
-  }
+  if (!configured()) redirect("/configuracao");
+  const db = await supabase();
+  const { error } = await db.auth.signOut({ scope: "local" });
+  if (error) redirect("/login?logout=erro");
   redirect("/login");
 }
 export async function createOrder(form: FormData) {
   const { db, user } = await session();
   const input = orderSchema.safeParse(Object.fromEntries(form));
   if (!input.success) failed("/ordens/nova");
-  const { title, unit_id, category_id, priority, ...details } = input.data;
+  const {
+    title,
+    unit_id,
+    category_id,
+    priority,
+    driver,
+    vehicle,
+    route,
+    ...details
+  } = input.data;
   if (details.occurred_at && !Number.isFinite(Date.parse(details.occurred_at)))
     failed("/ordens/nova");
   const { data: category, error: categoryError } = await db
@@ -68,6 +76,9 @@ export async function createOrder(form: FormData) {
       title,
       unit_id,
       category_id,
+      driver_id: driver || null,
+      vehicle_id: vehicle || null,
+      route_id: route || null,
       priority,
       details,
       opened_by: user.id,

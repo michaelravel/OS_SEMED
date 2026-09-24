@@ -1,4 +1,4 @@
-// Contrato do schema os_* da migration 202609230001. Regenerar após mudanças no banco.
+// Contrato do schema os_* até a migration 202609240005. Regenerar após mudanças no banco.
 import type { Catalog, Membership, Order, Unit } from "./domain";
 type Table<Row, Required extends keyof Row = never> = {
   Row: Row;

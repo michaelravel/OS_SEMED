@@ -1,42 +1,31 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/lib/database.types";
+import {
+  buildContentSecurityPolicy,
+  isPrivateRoute,
+} from "@/lib/web-security";
+
 export async function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const isDevelopment = process.env.NODE_ENV === "development";
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  let supabaseOrigin = "";
-  let supabaseSocket = "";
-  try {
-    const endpoint = url ? new URL(url) : null;
-    supabaseOrigin = endpoint?.origin ?? "";
-    supabaseSocket = endpoint ? `wss://${endpoint.host}` : "";
-  } catch {
-    // A tela de configuração tratará uma URL ausente ou inválida.
-  }
-  const csp = [
-    "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDevelopment ? " 'unsafe-eval'" : ""}`,
-    `style-src 'self' 'nonce-${nonce}'${isDevelopment ? " 'unsafe-inline'" : ""}`,
-    "img-src 'self' data: blob:",
-    "font-src 'self' data:",
-    `connect-src 'self' ${supabaseOrigin} ${supabaseSocket}`.trim(),
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-    ...(isDevelopment ? [] : ["upgrade-insecure-requests"]),
-  ].join("; ");
+  const csp = buildContentSecurityPolicy({
+    nonce,
+    supabaseUrl: url,
+    development: isDevelopment,
+  });
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set("Content-Security-Policy", csp);
-  const createResponse = () => {
-    const next = NextResponse.next({ request: { headers: requestHeaders } });
+  const secure = <T extends NextResponse>(next: T) => {
     next.headers.set("Content-Security-Policy", csp);
     next.headers.set("Cache-Control", "private, no-store");
     return next;
   };
+  const createResponse = () =>
+    secure(NextResponse.next({ request: { headers: requestHeaders } }));
   let response = createResponse();
   if (!url || !key) return response;
   const db = createServerClient<Database>(url, key, {
@@ -52,7 +41,24 @@ export async function proxy(request: NextRequest) {
       },
     },
   });
-  await db.auth.getClaims();
+
+  let authenticated = false;
+  try {
+    const { data, error } = await db.auth.getClaims();
+    authenticated = !error && Boolean(data?.claims?.sub);
+  } catch {
+    // Uma indisponibilidade do Auth não pode liberar uma rota privada.
+  }
+
+  // Esta é uma checagem antecipada. Server Components, Server Actions e RLS
+  // continuam responsáveis pela autorização definitiva.
+  if (isPrivateRoute(request.nextUrl.pathname) && !authenticated) {
+    const login = new URL("/login", request.url);
+    const redirect = secure(NextResponse.redirect(login, 303));
+    response.cookies.getAll().forEach((cookie) => redirect.cookies.set(cookie));
+    return redirect;
+  }
+
   return response;
 }
 export const config = {

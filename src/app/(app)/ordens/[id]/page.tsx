@@ -33,7 +33,7 @@ export default async function OrderPage({
   const { data, error } = await db
     .from("os_orders")
     .select(
-      "id,protocol,legacy_id,title,status,priority,status_reason,resolution,unit_id,opened_by,responsible_id,category_id,details,created_at,opened_at,completed_at,cancelled_at,reopened_at,active",
+      "id,protocol,legacy_id,title,status,priority,status_reason,resolution,unit_id,opened_by,responsible_id,category_id,driver_id,vehicle_id,route_id,requester_membership_id,responsible_membership_id,import_source,import_source_id,details,created_at,opened_at,completed_at,cancelled_at,reopened_at,active",
     )
     .eq("id", id)
     .maybeSingle();
@@ -150,6 +150,12 @@ export default async function OrderPage({
               {catalogRows.find((catalog) => catalog.id === o.category_id)
                 ?.name ?? "Aguardando conciliação"}
             </dd>
+            <dt>Motorista</dt>
+            <dd>{o.driver_id ? catalogName(o.driver_id) : "Não informado"}</dd>
+            <dt>Veículo</dt>
+            <dd>{o.vehicle_id ? catalogName(o.vehicle_id) : "Não informado"}</dd>
+            <dt>Rota</dt>
+            <dd>{o.route_id ? catalogName(o.route_id) : "Não informado"}</dd>
             {o.resolution && (
               <>
                 <dt>Solução aplicada</dt>
@@ -165,17 +171,10 @@ export default async function OrderPage({
                       occurred_at: "Data do ocorrido",
                       has_material: "Material",
                       police_report: "B.O. / REDS",
-                      driver: "Motorista",
-                      vehicle: "Veículo",
-                      route: "Rota",
                     } as Record<string, string>
                   )[k] ?? k}
                 </dt>
-                <dd>
-                  {["driver", "vehicle", "route"].includes(k)
-                    ? catalogName(String(v)) || "Não informado"
-                    : String(v) || "Não informado"}
-                </dd>
+                <dd>{String(v) || "Não informado"}</dd>
               </div>
             ))}
           </dl>

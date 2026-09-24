@@ -10,6 +10,13 @@ const migrations = await Promise.all(
     .sort()
     .map((file) => fs.readFile(new URL(file, migrationsDirectory), "utf8")),
 );
+const relationalRollback = await fs.readFile(
+  new URL(
+    "../supabase/rollbacks/202609240005_order_relational_integrity.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 test("migration e RLS isolam unidades, identidades, operações e anexos", async () => {
   const db = new PGlite();
   try {
@@ -101,6 +108,49 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
         resolution: null,
       },
     ]);
+    const relationalOrder = await db.query(
+      `select route_id,requester_membership_id,responsible_membership_id,
+        details ? 'route' as route_still_in_details
+       from os_orders where id='${orderA}'`,
+    );
+    assert.equal(relationalOrder.rows[0].route_id, routeUsed);
+    assert.ok(relationalOrder.rows[0].requester_membership_id);
+    assert.ok(relationalOrder.rows[0].responsible_membership_id);
+    assert.equal(relationalOrder.rows[0].route_still_in_details, false);
+    await assert.rejects(
+      db.query(`update os_orders set driver_id='${routeUsed}' where id='${orderA}'`),
+    );
+    await assert.rejects(
+      db.query(
+        `update os_orders set category_id='${routeUsed}' where id='${legacyOrder}'`,
+      ),
+    );
+    await assert.rejects(
+      db.query(
+        `insert into os_orders(title,status,import_source,import_source_id)
+         values('Origem inexistente','A conferir','seed/ABERTURA_OS','ausente')`,
+      ),
+    );
+    await assert.rejects(
+      db.query(
+        `update os_memberships set role='gestor' where user_id='${owner}' and role='solicitante'`,
+      ),
+    );
+    await assert.rejects(
+      db.query(
+        `insert into os_units(name) values(' a ')`,
+      ),
+    );
+    await db.query(
+      `update os_catalogs set data='{"routeId":"TEST-2"}' where id='${routeOther}'`,
+    );
+    await assert.rejects(
+      db.query(
+        `insert into os_catalogs(legacy_id,kind,name,data) values(
+          'NEW-duplicate-route','routes','Duplicada','{"routeId":"TEST-2"}'
+        )`,
+      ),
+    );
     async function asUser(id, sql) {
       await db.exec(
         `reset role; set role authenticated; select set_config('request.jwt.claim.sub','${id}',false);`,
@@ -231,7 +281,7 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
     await asUser(admin, `select os_save_unit('${unitB}','B','','','',true)`);
     await asUser(
       admin,
-      `select os_save_catalog('${routeOther}','routes','Rota não relacionada','{"routeId":"2","number":"2","link":"https://example.com"}',true)`,
+      `select os_save_catalog('${routeOther}','routes','Rota não relacionada','{"routeId":"TEST-2","number":"2","link":"https://example.com"}',true)`,
     );
     await assert.rejects(
       asUser(
@@ -745,12 +795,12 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
           imported.catalogs,
           "id,legacy_id,kind,name,data,active",
         ],
+        ["os_import_records", imported.original, "source,source_id,payload"],
         [
           "os_orders",
           imported.orders,
-          "id,legacy_id,unit_id,opened_by,responsible_id,category_id,title,status,details,opened_at,active",
+          "id,legacy_id,import_source,import_source_id,unit_id,opened_by,responsible_id,category_id,title,status,details,opened_at,active",
         ],
-        ["os_import_records", imported.original, "source,source_id,payload"],
       ]) {
         await db.query(
           `insert into ${table}(${columns}) select ${columns} from jsonb_populate_recordset(null::${table},$1) on conflict do nothing`,
@@ -766,10 +816,18 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
     assert.equal(
       (
         await db.query(
-          "select id from os_orders where legacy_id is not null and status='A conferir' and opened_by is null and category_id is null",
+          "select id from os_orders where legacy_id is not null and import_source='seed/ABERTURA_OS' and import_source_id=legacy_id",
         )
       ).rows.length,
       5,
+    );
+    assert.equal(
+      (
+        await db.query(
+          "select id from os_orders where legacy_id is not null and status='A conferir' and opened_by is null and category_id is null",
+        )
+      ).rows.length,
+      1,
     );
     const importedOrder = imported.orders[0].id;
     assert.equal(
@@ -792,6 +850,19 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
       "select payload from os_import_records where source='seed/ABERTURA_OS' order by source_id",
     );
     assert.equal(archived.rows.length, 5);
+
+    await db.exec("reset role");
+    await db.exec(relationalRollback);
+    const restored = await db.query(
+      `select details ->> 'route' as route from os_orders where id='${orderA}'`,
+    );
+    assert.equal(restored.rows[0].route, routeUsed);
+    const restoredImport = await db.query(
+      `select details ->> '_import_source' as source
+       from os_orders where id='${importedOrder}'`,
+    );
+    assert.equal(restoredImport.rows[0].source, "seed/ABERTURA_OS");
+    await assert.rejects(db.query("select route_id from os_orders limit 1"));
   } finally {
     await db.close();
   }

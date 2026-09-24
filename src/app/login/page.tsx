@@ -4,9 +4,9 @@ import Link from "next/link";
 export default async function Login({
   searchParams,
 }: {
-  searchParams: Promise<{ erro?: string }>;
+  searchParams: Promise<{ erro?: string; logout?: string }>;
 }) {
-  const { erro } = await searchParams;
+  const { erro, logout } = await searchParams;
   return (
     <main className="login-page">
       <section className="login-brand">
@@ -36,6 +36,13 @@ export default async function Login({
             <p role="alert" className="notice danger">
               Não foi possível entrar. Verifique suas credenciais e tente
               novamente.
+            </p>
+          )}
+          {logout === "erro" && (
+            <p role="alert" className="notice danger">
+              Não foi possível confirmar o encerramento completo da sessão.
+              Feche esta janela se estiver em um computador compartilhado e
+              tente sair novamente antes de continuar.
             </p>
           )}
           {configured() ? (

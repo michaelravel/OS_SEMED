@@ -6,6 +6,9 @@ export function stableId(scope, key) {
 export function sourceKey(row, index) {
   return `${row["Row ID"] || row.ID || "row"}:${index + 1}`;
 }
+function normalized(value) {
+  return String(value ?? "").trim().toLocaleLowerCase("pt-BR");
+}
 export function mapSeed(seed) {
   const warnings = [];
   const original = [];
@@ -78,6 +81,17 @@ export function mapSeed(seed) {
   const orders = (seed.ABERTURA_OS ?? []).map((r, i) => {
     const matches = units.filter((u) => u.name === r.ESTABELECIMENTO);
     const id = stableId("orders", sourceKey(r, i));
+    const categoryMatches = catalogs.filter(
+      (catalog) =>
+        catalog.kind === "logistics" &&
+        normalized(catalog.data.area) === normalized(r["ÁREA DE SOLICITAÇÃO"]) &&
+        normalized(catalog.data.nature) ===
+          normalized(r["NATUREZA DA ATIVIDADE"]) &&
+        normalized(catalog.data.type) === normalized(r["TIPO DE ATIVIDADE"]) &&
+        normalized(r["ÁREA DE SOLICITAÇÃO"]) &&
+        normalized(r["NATUREZA DA ATIVIDADE"]) &&
+        normalized(r["TIPO DE ATIVIDADE"]),
+    );
     if (matches.length !== 1)
       warnings.push({
         id,
@@ -88,6 +102,11 @@ export function mapSeed(seed) {
       reason:
         "Status, autoria e responsável exigem conciliação; nenhuma conta foi inferida",
     });
+    if (categoryMatches.length !== 1)
+      warnings.push({
+        id,
+        reason: "Classificação ausente ou ambígua; mantida para conciliação",
+      });
     let opened_at = null;
     const serial = Number(r["DATA DE ABERTURA"]);
     if (Number.isFinite(serial) && serial > 0 && serial < 100000)
@@ -97,10 +116,13 @@ export function mapSeed(seed) {
     return {
       id,
       legacy_id: sourceKey(r, i),
+      import_source: "seed/ABERTURA_OS",
+      import_source_id: sourceKey(r, i),
       unit_id: matches.length === 1 ? matches[0].id : null,
       opened_by: null,
       responsible_id: null,
-      category_id: null,
+      category_id:
+        categoryMatches.length === 1 ? categoryMatches[0].id : null,
       title: String(
         r["DESCRIÇÃO DA ATIVIDADE"] ||
           r["TIPO DE ATIVIDADE"] ||
