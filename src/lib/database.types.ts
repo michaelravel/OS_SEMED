@@ -4,6 +4,7 @@ import type {
   Membership,
   Order,
   OrderOperation,
+  WorkflowAction,
   Unit,
 } from "./domain";
 type Table<Row, Required extends keyof Row = never> = {
@@ -200,7 +201,11 @@ export type Database = {
       };
       os_order_available_actions: {
         Args: { target: string };
-        Returns: { next_status: string; operation: string }[];
+        Returns: { operation: WorkflowAction }[];
+      };
+      os_order_can_collaborate: {
+        Args: { target: string };
+        Returns: boolean;
       };
       os_assign_order: {
         Args:

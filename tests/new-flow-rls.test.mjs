@@ -193,6 +193,15 @@ test("RLS do novo fluxo separa origem, execução, autoria e dados internos", as
         ),
         2,
       );
+      assert.equal(
+        (
+          await asUser(
+            user,
+            `select os_order_can_collaborate('${order}') as allowed`,
+          )
+        ).rows[0].allowed,
+        true,
+      );
     }
 
     for (const user of [
@@ -226,9 +235,27 @@ test("RLS do novo fluxo separa origem, execução, autoria e dados internos", as
         await countAs(user, "os_attachments", `order_id='${order}'`),
         0,
       );
+      assert.equal(
+        (
+          await asUser(
+            user,
+            `select os_order_can_collaborate('${order}') as allowed`,
+          )
+        ).rows[0].allowed,
+        false,
+      );
     }
 
     assert.equal(await countAs(users.requester, "os_orders", `id='${order}'`), 1);
+    assert.equal(
+      (
+        await asUser(
+          users.requester,
+          `select os_order_can_collaborate('${order}') as allowed`,
+        )
+      ).rows[0].allowed,
+      true,
+    );
     assert.equal(
       await countAs(users.requester, "os_order_service_entries", `order_id='${order}'`),
       0,
@@ -357,6 +384,9 @@ test("RLS do novo fluxo separa origem, execução, autoria e dados internos", as
     await assert.rejects(asAnon("select id from os_attachments"));
     await assert.rejects(
       asAnon(`select os_start_service('${order}',6)`),
+    );
+    await assert.rejects(
+      asAnon(`select os_order_can_collaborate('${order}')`),
     );
   } finally {
     await db.close();

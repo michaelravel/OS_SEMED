@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { queryLimits } from "@/lib/application-config";
 import { orderStatusNames } from "@/lib/domain";
+import {
+  actionErrorMessages,
+  isActionErrorCode,
+} from "@/lib/action-result";
 export function Heading({
   title,
   description,
@@ -17,10 +21,13 @@ export function Heading({
   );
 }
 export function Notice({ error }: { error?: string }) {
+  const message =
+    error && isActionErrorCode(error)
+      ? actionErrorMessages[error]
+      : actionErrorMessages.unexpected;
   return error ? (
     <p className="notice danger" role="alert">
-      Não foi possível salvar. Verifique os campos e suas permissões e tente
-      novamente.
+      {message}
     </p>
   ) : null;
 }

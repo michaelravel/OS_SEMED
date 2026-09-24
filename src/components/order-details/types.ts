@@ -2,6 +2,10 @@ import type { Database } from "@/lib/database.types";
 import type { Catalog, Order } from "@/lib/domain";
 
 export type NamedOption = { id: string; name: string };
+export type ResponsibleMembershipOption = NamedOption & {
+  unit_id: string | null;
+  user_id: string;
+};
 export type OrderDetail = Pick<
   Order,
   | "id"
@@ -35,7 +39,11 @@ export type OrderEvent = Pick<
   Database["public"]["Tables"]["os_order_events"]["Row"],
   "id" | "from_status" | "to_status" | "reason" | "created_at"
 >;
-export type WorkflowAction =
+export type OrderServiceEntryView = Pick<
+  Database["public"]["Tables"]["os_order_service_entries"]["Row"],
+  "id" | "entry_type" | "description" | "serviced_at" | "created_at"
+>;
+export type AvailableWorkflowAction =
   Database["public"]["Functions"]["os_order_available_actions"]["Returns"][number];
 export type AttachmentPolicy =
   Database["public"]["Functions"]["os_attachment_policy"]["Returns"][number];

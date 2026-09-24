@@ -5,16 +5,15 @@ import { OrderActivity } from "@/components/order-details/order-activity";
 import { OrderAdministration } from "@/components/order-details/order-administration";
 import { OrderAttachments } from "@/components/order-details/order-attachments";
 import { OrderSummary } from "@/components/order-details/order-summary";
+import { OrderWorkflowActions } from "@/components/order-details/order-workflow-actions";
 import { queryLimits } from "@/lib/application-config";
-import {
-  terminalStatuses,
-  roleNames,
-} from "@/lib/domain";
+import { roleNames, workflowActionNames } from "@/lib/domain";
 import { session } from "@/lib/session";
 import { ensureQueriesSucceeded, ensureQuerySucceeded } from "@/lib/errors";
 import type {
   OrderCatalog,
   OrderDetail,
+  ResponsibleMembershipOption,
 } from "@/components/order-details/types";
 
 export default async function OrderPage({
@@ -27,7 +26,7 @@ export default async function OrderPage({
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
 
-  const { db, admin, user, memberships } = await session();
+  const { db, admin, user } = await session();
   const { data, error } = await db
     .from("os_orders")
     .select(
@@ -46,8 +45,11 @@ export default async function OrderPage({
     profiles,
     catalogs,
     events,
+    serviceEntries,
     availableActions,
     attachmentPolicies,
+    workflowMemberships,
+    collaboration,
   ] = await Promise.all([
     db
       .from("os_messages")
@@ -85,8 +87,23 @@ export default async function OrderPage({
       .eq("order_id", id)
       .order("created_at", { ascending: false })
       .limit(queryLimits.detailRows),
+    db
+      .from("os_order_service_entries")
+      .select("id,entry_type,description,serviced_at,created_at")
+      .eq("order_id", id)
+      .order("serviced_at", { ascending: false })
+      .limit(queryLimits.detailRows),
     db.rpc("os_order_available_actions", { target: id }),
     db.rpc("os_attachment_policy"),
+    admin
+      ? db
+          .from("os_memberships")
+          .select("id,user_id,unit_id,role")
+          .eq("active", true)
+          .in("role", [roleNames.requester, roleNames.responsible])
+          .limit(queryLimits.lookupRows)
+      : Promise.resolve({ data: [], error: null }),
+    db.rpc("os_order_can_collaborate", { target: id }),
   ]);
 
   ensureQueriesSucceeded(
@@ -97,33 +114,52 @@ export default async function OrderPage({
       profiles,
       catalogs,
       events,
+      serviceEntries,
       availableActions,
       attachmentPolicies,
+      workflowMemberships,
+      collaboration,
     ],
     "Falha ao consultar detalhes",
   );
 
-  const assigned =
-    memberships.some(
-      (membership) =>
-        membership.role === roleNames.responsible &&
-        membership.unit_id === order.unit_id,
-    ) && order.responsible_id === user.id;
-  const closed = terminalStatuses.includes(
-    order.status as (typeof terminalStatuses)[number],
-  );
-  const canPost =
-    !closed &&
-    (admin ||
-      assigned ||
-      (order.opened_by === user.id &&
-        memberships.some(
-          (membership) =>
-            membership.role === roleNames.requester &&
-            membership.unit_id === order.unit_id,
-        )));
+  const canPost = collaboration.data === true;
   const unit = units.data?.find((item) => item.id === order.unit_id);
   const catalogRows = (catalogs.data ?? []) as OrderCatalog[];
+  const profileName = new Map(
+    (profiles.data ?? []).map((profile) => [profile.id, profile.name]),
+  );
+  const unitName = new Map(
+    (units.data ?? []).map((availableUnit) => [
+      availableUnit.id,
+      availableUnit.name,
+    ]),
+  );
+  const membershipsForWorkflow = workflowMemberships.data ?? [];
+  const requesters = Array.from(
+    new Map(
+      membershipsForWorkflow
+        .filter((membership) => membership.role === roleNames.requester)
+        .map((membership) => [
+          membership.user_id,
+          {
+            id: membership.user_id,
+            name: profileName.get(membership.user_id) ?? "Solicitante",
+          },
+        ]),
+    ).values(),
+  );
+  const responsibleMemberships = membershipsForWorkflow
+    .filter((membership) => membership.role === roleNames.responsible)
+    .map(
+      (membership): ResponsibleMembershipOption => ({
+        id: membership.id,
+        user_id: membership.user_id,
+        unit_id: membership.unit_id,
+        name: `${profileName.get(membership.user_id) ?? "Responsável"} · ${unitName.get(membership.unit_id ?? "") ?? "Unidade não informada"}`,
+      }),
+    );
+  const workflowOperations = availableActions.data ?? [];
 
   return (
     <>
@@ -134,10 +170,8 @@ export default async function OrderPage({
       <Notice error={(await searchParams).erro} />
       <div className="detail-grid">
         <OrderSummary
-          id={id}
           order={order}
           catalogs={catalogRows}
-          workflowActions={availableActions.data ?? []}
         />
         <OrderAttachments
           id={id}
@@ -146,19 +180,28 @@ export default async function OrderPage({
           canPost={canPost}
         />
       </div>
-      {admin && (
+      <OrderWorkflowActions
+        id={id}
+        version={order.version}
+        actions={workflowOperations}
+        units={units.data ?? []}
+        requesters={requesters}
+        responsibleMemberships={responsibleMemberships}
+        catalogs={catalogRows}
+      />
+      {workflowOperations.some(
+        ({ operation }) => operation === workflowActionNames.edit,
+      ) && (
         <OrderAdministration
           id={id}
           order={order}
-          units={units.data ?? []}
-          profiles={profiles.data ?? []}
-          catalogs={catalogRows}
         />
       )}
       <OrderActivity
         id={id}
         userId={user.id}
         events={events.data ?? []}
+        serviceEntries={serviceEntries.data ?? []}
         messages={messages.data ?? []}
         canPost={canPost}
       />

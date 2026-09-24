@@ -1,16 +1,6 @@
-import {
-  cancelOrder,
-  changeStatus,
-  completeOrder,
-  reopenOrder,
-} from "@/app/actions";
 import { Badge, date } from "@/components/ui";
-import {
-  workflowLimits,
-  orderStatusNames,
-  type OrderDetails,
-} from "@/lib/domain";
-import type { OrderCatalog, OrderDetail, WorkflowAction } from "./types";
+import type { OrderDetails } from "@/lib/domain";
+import type { OrderCatalog, OrderDetail } from "./types";
 
 const detailLabels = {
   observation: "Observações",
@@ -20,31 +10,14 @@ const detailLabels = {
 } satisfies Partial<Record<keyof OrderDetails, string>>;
 
 export function OrderSummary({
-  id,
   order,
   catalogs,
-  workflowActions,
 }: {
-  id: string;
   order: OrderDetail;
   catalogs: OrderCatalog[];
-  workflowActions: WorkflowAction[];
 }) {
   const catalogName = (value: string) =>
     catalogs.find((catalog) => catalog.id === value)?.name ?? value;
-  const nextStatuses = workflowActions.filter(
-    (action) => action.operation === "advance",
-  );
-  const canComplete = workflowActions.some(
-    (action) => action.operation === "complete",
-  );
-  const canCancel = workflowActions.some(
-    (action) => action.operation === "cancel",
-  );
-  const canReopen = workflowActions.some(
-    (action) => action.operation === "reopen",
-  );
-
   return (
     <section className="card">
       <div className="section-head">
@@ -84,83 +57,6 @@ export function OrderSummary({
           </div>
         ))}
       </dl>
-      {nextStatuses.length > 0 && (
-        <form action={changeStatus} className="filters">
-          <input type="hidden" name="id" value={id} />
-          <label>
-            Situação
-            <select name="status" defaultValue="" required>
-              <option value="">Selecione a próxima situação</option>
-              {nextStatuses.map((action) => (
-                <option key={action.next_status}>{action.next_status}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Motivo / observação
-            <input name="reason" maxLength={workflowLimits.justificationMax} />
-          </label>
-          <button>Atualizar status</button>
-        </form>
-      )}
-      {canComplete && (
-        <form action={completeOrder}>
-          <input type="hidden" name="id" value={id} />
-          <input type="hidden" name="version" value={order.version} />
-          <label>
-            Solução aplicada
-            <textarea
-              name="solution"
-              required
-              minLength={workflowLimits.solutionMin}
-              maxLength={workflowLimits.solutionMax}
-              rows={4}
-            />
-          </label>
-          <button>Concluir ordem</button>
-        </form>
-      )}
-      {canCancel && (
-        <form action={cancelOrder}>
-          <input type="hidden" name="id" value={id} />
-          <input type="hidden" name="version" value={order.version} />
-          <label>
-            Justificativa do cancelamento
-            <textarea
-              name="justification"
-              required
-              minLength={workflowLimits.justificationMin}
-              maxLength={workflowLimits.justificationMax}
-              rows={3}
-            />
-          </label>
-          <button>Cancelar ordem</button>
-        </form>
-      )}
-      {canReopen && (
-        <form action={reopenOrder}>
-          <input type="hidden" name="id" value={id} />
-          <input type="hidden" name="version" value={order.version} />
-          <label>
-            Justificativa da reabertura
-            <textarea
-              name="justification"
-              required
-              minLength={workflowLimits.justificationMin}
-              maxLength={workflowLimits.justificationMax}
-              rows={3}
-            />
-          </label>
-          <button>Reabrir ordem</button>
-        </form>
-      )}
-      {order.status === orderStatusNames.pendingReview &&
-        workflowActions.length === 0 && (
-        <p className="notice">
-          Concilie unidade, solicitante e classificação antes de liberar esta
-          ordem.
-        </p>
-      )}
     </section>
   );
 }

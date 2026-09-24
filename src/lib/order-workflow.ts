@@ -130,6 +130,25 @@ export const orderOperations = [
 ] as const;
 export type OrderOperation = (typeof orderOperations)[number];
 
+export const workflowActionNames = {
+  reconcile: "RECONCILE",
+  triage: "TRIAGE",
+  forward: "FORWARD",
+  assign: "ASSIGN",
+  reassign: "REASSIGN",
+  startService: "START_SERVICE",
+  addServiceEntry: "ADD_SERVICE_ENTRY",
+  waitInformation: "WAIT_INFORMATION",
+  resume: "RESUME",
+  complete: "COMPLETE",
+  cancel: "CANCEL",
+  reopen: "REOPEN",
+  edit: "EDIT",
+} as const;
+export const workflowActions = Object.values(workflowActionNames);
+export type WorkflowAction = (typeof workflowActions)[number];
+export const workflowActionSchema = z.enum(workflowActions);
+
 export const terminalOrderStatuses = [
   canonicalOrderStatusNames.completed,
   canonicalOrderStatusNames.canceled,

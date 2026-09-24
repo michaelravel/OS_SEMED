@@ -22,6 +22,7 @@ import {
 import {
   actionFailed,
   formText,
+  orderActionFailed,
   requireAdministrator,
 } from "./shared";
 
@@ -29,6 +30,15 @@ function refreshOrder(id: string) {
   revalidatePath(`/ordens/${id}`);
   revalidatePath("/ordens");
   revalidatePath("/painel");
+}
+
+function orderPath(form: FormData) {
+  const id = z.uuid().safeParse(form.get("id"));
+  return id.success ? `/ordens/${id.data}` : "/ordens";
+}
+
+function invalidOrderAction(form: FormData, operation: string) {
+  return actionFailed(orderPath(form), "validation", operation);
 }
 
 export async function createOrder(form: FormData) {
@@ -71,9 +81,9 @@ export async function createOrder(form: FormData) {
 }
 
 export async function reconcileOrder(form: FormData) {
-  const { db } = await session();
   const input = orderReconciliationSchema.safeParse(Object.fromEntries(form));
-  if (!input.success) return actionFailed("/ordens");
+  if (!input.success) return invalidOrderAction(form, "RECONCILE");
+  const { db } = await session();
   const { id, version, unit_id, opened_by, category_id } = input.data;
   const { error } = await db.rpc("os_reconcile_order", {
     target: id,
@@ -82,55 +92,56 @@ export async function reconcileOrder(form: FormData) {
     target_opened_by: opened_by,
     target_category: category_id,
   });
-  if (error) return actionFailed(`/ordens/${id}`);
+  if (error)
+    return orderActionFailed(`/ordens/${id}`, error, "RECONCILE");
   refreshOrder(id);
 }
 
 export async function startTriage(form: FormData) {
-  const { db } = await session();
   const input = orderVersionedSchema.safeParse(Object.fromEntries(form));
-  if (!input.success) return actionFailed("/ordens");
+  if (!input.success) return invalidOrderAction(form, "TRIAGE");
+  const { db } = await session();
   const { id, version } = input.data;
   const { error } = await db.rpc("os_start_triage", {
     target: id,
     expected_version: version,
   });
-  if (error) return actionFailed(`/ordens/${id}`);
+  if (error) return orderActionFailed(`/ordens/${id}`, error, "TRIAGE");
   refreshOrder(id);
 }
 
 export async function forwardOrder(form: FormData) {
-  const { db } = await session();
   const input = orderForwardSchema.safeParse(Object.fromEntries(form));
-  if (!input.success) return actionFailed("/ordens");
+  if (!input.success) return invalidOrderAction(form, "FORWARD");
+  const { db } = await session();
   const { id, version, destination_unit_id } = input.data;
   const { error } = await db.rpc("os_forward_order", {
     target: id,
     expected_version: version,
     destination_unit: destination_unit_id,
   });
-  if (error) return actionFailed(`/ordens/${id}`);
+  if (error) return orderActionFailed(`/ordens/${id}`, error, "FORWARD");
   refreshOrder(id);
 }
 
 export async function assignOrder(form: FormData) {
-  const { db } = await session();
   const input = orderAssignmentSchema.safeParse(Object.fromEntries(form));
-  if (!input.success) return actionFailed("/ordens");
+  if (!input.success) return invalidOrderAction(form, "ASSIGN");
+  const { db } = await session();
   const { id, version, responsible_membership_id } = input.data;
   const { error } = await db.rpc("os_assign_order", {
     target: id,
     expected_version: version,
     responsible_membership: responsible_membership_id,
   });
-  if (error) return actionFailed(`/ordens/${id}`);
+  if (error) return orderActionFailed(`/ordens/${id}`, error, "ASSIGN");
   refreshOrder(id);
 }
 
 export async function reassignOrder(form: FormData) {
-  const { db } = await session();
   const input = orderReassignmentSchema.safeParse(Object.fromEntries(form));
-  if (!input.success) return actionFailed("/ordens");
+  if (!input.success) return invalidOrderAction(form, "REASSIGN");
+  const { db } = await session();
   const { id, version, responsible_membership_id, justification } = input.data;
   const { error } = await db.rpc("os_reassign_order", {
     target: id,
@@ -138,27 +149,28 @@ export async function reassignOrder(form: FormData) {
     responsible_membership: responsible_membership_id,
     justification,
   });
-  if (error) return actionFailed(`/ordens/${id}`);
+  if (error) return orderActionFailed(`/ordens/${id}`, error, "REASSIGN");
   refreshOrder(id);
 }
 
 export async function startService(form: FormData) {
-  const { db } = await session();
   const input = orderVersionedSchema.safeParse(Object.fromEntries(form));
-  if (!input.success) return actionFailed("/ordens");
+  if (!input.success) return invalidOrderAction(form, "START_SERVICE");
+  const { db } = await session();
   const { id, version } = input.data;
   const { error } = await db.rpc("os_start_service", {
     target: id,
     expected_version: version,
   });
-  if (error) return actionFailed(`/ordens/${id}`);
+  if (error)
+    return orderActionFailed(`/ordens/${id}`, error, "START_SERVICE");
   refreshOrder(id);
 }
 
 export async function addServiceEntry(form: FormData) {
-  const { db } = await session();
   const input = orderServiceEntrySchema.safeParse(Object.fromEntries(form));
-  if (!input.success) return actionFailed("/ordens");
+  if (!input.success) return invalidOrderAction(form, "ADD_SERVICE_ENTRY");
+  const { db } = await session();
   const { id, version, entry_type, description, serviced_at } = input.data;
   const { error } = await db.rpc("os_add_service_entry", {
     target: id,
@@ -167,14 +179,15 @@ export async function addServiceEntry(form: FormData) {
     entry_description: description,
     serviced_on: serviced_at,
   });
-  if (error) return actionFailed(`/ordens/${id}`);
+  if (error)
+    return orderActionFailed(`/ordens/${id}`, error, "ADD_SERVICE_ENTRY");
   refreshOrder(id);
 }
 
 export async function waitForInformation(form: FormData) {
-  const { db } = await session();
   const input = orderWaitingSchema.safeParse(Object.fromEntries(form));
-  if (!input.success) return actionFailed("/ordens");
+  if (!input.success) return invalidOrderAction(form, "WAIT_INFORMATION");
+  const { db } = await session();
   const { id, version, waitingReason, justification } = input.data;
   const { error } = await db.rpc("os_wait_for_information", {
     target: id,
@@ -182,20 +195,21 @@ export async function waitForInformation(form: FormData) {
     wait_reason: waitingReason,
     wait_details: justification,
   });
-  if (error) return actionFailed(`/ordens/${id}`);
+  if (error)
+    return orderActionFailed(`/ordens/${id}`, error, "WAIT_INFORMATION");
   refreshOrder(id);
 }
 
 export async function resumeService(form: FormData) {
-  const { db } = await session();
   const input = orderVersionedSchema.safeParse(Object.fromEntries(form));
-  if (!input.success) return actionFailed("/ordens");
+  if (!input.success) return invalidOrderAction(form, "RESUME");
+  const { db } = await session();
   const { id, version } = input.data;
   const { error } = await db.rpc("os_resume_service", {
     target: id,
     expected_version: version,
   });
-  if (error) return actionFailed(`/ordens/${id}`);
+  if (error) return orderActionFailed(`/ordens/${id}`, error, "RESUME");
   refreshOrder(id);
 }
 
@@ -214,44 +228,44 @@ export async function changeStatus(form: FormData) {
 }
 
 export async function completeOrder(form: FormData) {
-  const { db } = await session();
   const input = completeOrderSchema.safeParse(Object.fromEntries(form));
-  if (!input.success) return actionFailed("/ordens");
+  if (!input.success) return invalidOrderAction(form, "COMPLETE");
+  const { db } = await session();
   const { id, version, solution } = input.data;
   const { error } = await db.rpc("os_complete_order", {
     target: id,
     expected_version: version,
     solution,
   });
-  if (error) return actionFailed(`/ordens/${id}`);
+  if (error) return orderActionFailed(`/ordens/${id}`, error, "COMPLETE");
   refreshOrder(id);
 }
 
 export async function cancelOrder(form: FormData) {
-  const { db } = await session();
   const input = justifyOrderSchema.safeParse(Object.fromEntries(form));
-  if (!input.success) return actionFailed("/ordens");
+  if (!input.success) return invalidOrderAction(form, "CANCEL");
+  const { db } = await session();
   const { id, version, justification } = input.data;
   const { error } = await db.rpc("os_cancel_order", {
     target: id,
     expected_version: version,
     justification,
   });
-  if (error) return actionFailed(`/ordens/${id}`);
+  if (error) return orderActionFailed(`/ordens/${id}`, error, "CANCEL");
   refreshOrder(id);
 }
 
 export async function reopenOrder(form: FormData) {
-  const { db } = await session();
   const input = justifyOrderSchema.safeParse(Object.fromEntries(form));
-  if (!input.success) return actionFailed("/ordens");
+  if (!input.success) return invalidOrderAction(form, "REOPEN");
+  const { db } = await session();
   const { id, version, justification } = input.data;
   const { error } = await db.rpc("os_reopen_order", {
     target: id,
     expected_version: version,
     justification,
   });
-  if (error) return actionFailed(`/ordens/${id}`);
+  if (error) return orderActionFailed(`/ordens/${id}`, error, "REOPEN");
   refreshOrder(id);
 }
 
@@ -287,7 +301,6 @@ export async function editOrderDetails(form: FormData) {
 }
 
 export async function editOrderControlled(form: FormData) {
-  const { db } = await session();
   const input = orderVersionedSchema
     .extend({
       title: z.string().trim().min(3).max(fieldLimits.title),
@@ -298,7 +311,8 @@ export async function editOrderControlled(form: FormData) {
       priority_reason: z.string().trim().max(2_000),
     })
     .safeParse(Object.fromEntries(form));
-  if (!input.success) return actionFailed("/ordens");
+  if (!input.success) return invalidOrderAction(form, "EDIT");
+  const { db } = await session();
   const { id, version, title, priority, priority_reason, ...details } =
     input.data;
   const { data: previous, error: readError } = await db
@@ -306,7 +320,10 @@ export async function editOrderControlled(form: FormData) {
     .select("details")
     .eq("id", id)
     .single();
-  if (readError || !previous) return actionFailed(`/ordens/${id}`);
+  if (readError)
+    return orderActionFailed(`/ordens/${id}`, readError, "EDIT");
+  if (!previous)
+    return actionFailed(`/ordens/${id}`, "not_found", "EDIT");
   const { error } = await db.rpc("os_edit_order_controlled", {
     target: id,
     expected_version: version,
@@ -315,7 +332,7 @@ export async function editOrderControlled(form: FormData) {
     priority_justification: priority_reason,
     detail_patch: { ...previous.details, ...details },
   });
-  if (error) return actionFailed(`/ordens/${id}`);
+  if (error) return orderActionFailed(`/ordens/${id}`, error, "EDIT");
   refreshOrder(id);
 }
 

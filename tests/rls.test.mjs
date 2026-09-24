@@ -244,14 +244,18 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
         `insert into os_orders(unit_id,opened_by,title) values('${unitB}','${owner}','Invasão')`,
       ),
     );
-    assert.equal(
+    assert.deepEqual(
       (
         await asUser(
           admin,
-          `select * from os_order_available_actions('${legacyOrder}')`,
+          `select operation from os_order_available_actions('${legacyOrder}')`,
         )
-      ).rows.length,
-      0,
+      ).rows,
+      [
+        { operation: "RECONCILE" },
+        { operation: "CANCEL" },
+        { operation: "EDIT" },
+      ],
     );
     await assert.rejects(
       asUser(admin, `select os_change_status('${legacyOrder}','Aberta','')`),
@@ -264,10 +268,14 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
       (
         await asUser(
           admin,
-          `select next_status,operation from os_order_available_actions('${legacyOrder}')`,
+          `select operation from os_order_available_actions('${legacyOrder}')`,
         )
       ).rows,
-      [{ next_status: "Aberta", operation: "advance" }],
+      [
+        { operation: "RECONCILE" },
+        { operation: "CANCEL" },
+        { operation: "EDIT" },
+      ],
     );
     await asUser(
       admin,
@@ -370,12 +378,13 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
       (
         await asUser(
           admin,
-          `select next_status,operation from os_order_available_actions('${orderA}')`,
+          `select operation from os_order_available_actions('${orderA}')`,
         )
       ).rows,
       [
-        { next_status: "Em análise", operation: "advance" },
-        { next_status: "Cancelada", operation: "cancel" },
+        { operation: "TRIAGE" },
+        { operation: "CANCEL" },
+        { operation: "EDIT" },
       ],
     );
     await asUser(tech, `select os_change_status('${orderA}','Em análise','')`);
@@ -862,14 +871,18 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
       1,
     );
     const importedOrder = imported.orders[0].id;
-    assert.equal(
+    assert.deepEqual(
       (
         await asUser(
           admin,
-          `select * from os_order_available_actions('${importedOrder}')`,
+          `select operation from os_order_available_actions('${importedOrder}')`,
         )
-      ).rows.length,
-      0,
+      ).rows,
+      [
+        { operation: "RECONCILE" },
+        { operation: "CANCEL" },
+        { operation: "EDIT" },
+      ],
     );
     await assert.rejects(
       asUser(admin, `select os_change_status('${importedOrder}','Aberta','')`),

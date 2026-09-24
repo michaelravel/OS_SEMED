@@ -114,6 +114,29 @@ test("operações canônicas validam estado, autorização, versão e atomicidad
     );
     const order = opened.rows[0].id;
 
+    assert.deepEqual(
+      (
+        await asUser(
+          ids.admin,
+          `select operation from os_order_available_actions('${order}')`,
+        )
+      ).rows,
+      [
+        { operation: "TRIAGE" },
+        { operation: "CANCEL" },
+        { operation: "EDIT" },
+      ],
+    );
+    assert.deepEqual(
+      (
+        await asUser(
+          ids.requester,
+          `select operation from os_order_available_actions('${order}')`,
+        )
+      ).rows,
+      [],
+    );
+
     await db.exec(`
       create function public.reject_test_event() returns trigger language plpgsql as $$
       begin
@@ -136,6 +159,20 @@ test("operações canônicas validam estado, autorização, versão e atomicidad
     );
 
     await asUser(ids.admin, `select os_start_triage('${order}',1)`);
+    assert.deepEqual(
+      (
+        await asUser(
+          ids.admin,
+          `select operation from os_order_available_actions('${order}')`,
+        )
+      ).rows,
+      [
+        { operation: "FORWARD" },
+        { operation: "WAIT_INFORMATION" },
+        { operation: "CANCEL" },
+        { operation: "EDIT" },
+      ],
+    );
     await assert.rejects(
       asUser(ids.admin, `select os_forward_order('${order}',1,'${ids.executionUnit}')`),
     );
@@ -145,6 +182,20 @@ test("operações canônicas validam estado, autorização, versão e atomicidad
     await asUser(
       ids.admin,
       `select os_forward_order('${order}',2,'${ids.executionUnit}')`,
+    );
+    assert.deepEqual(
+      (
+        await asUser(
+          ids.admin,
+          `select operation from os_order_available_actions('${order}')`,
+        )
+      ).rows,
+      [
+        { operation: "ASSIGN" },
+        { operation: "WAIT_INFORMATION" },
+        { operation: "CANCEL" },
+        { operation: "EDIT" },
+      ],
     );
 
     const memberships = await db.query(
@@ -161,6 +212,34 @@ test("operações canônicas validam estado, autorização, versão e atomicidad
       ids.admin,
       `select os_assign_order('${order}',3,'${tech1Membership}')`,
     );
+    assert.deepEqual(
+      (
+        await asUser(
+          ids.tech1,
+          `select operation from os_order_available_actions('${order}')`,
+        )
+      ).rows,
+      [
+        { operation: "START_SERVICE" },
+        { operation: "WAIT_INFORMATION" },
+        { operation: "CANCEL" },
+      ],
+    );
+    assert.deepEqual(
+      (
+        await asUser(
+          ids.admin,
+          `select operation from os_order_available_actions('${order}')`,
+        )
+      ).rows,
+      [
+        { operation: "REASSIGN" },
+        { operation: "START_SERVICE" },
+        { operation: "WAIT_INFORMATION" },
+        { operation: "CANCEL" },
+        { operation: "EDIT" },
+      ],
+    );
     assert.equal(
       (await asUser(ids.tech1, `select id from os_orders where id='${order}'`))
         .rows.length,
@@ -174,6 +253,19 @@ test("operações canônicas validam estado, autorização, versão e atomicidad
       asUser(ids.tech1, `select os_start_service('${order}',5)`),
     );
     await asUser(ids.tech2, `select os_start_service('${order}',5)`);
+    assert.deepEqual(
+      (
+        await asUser(
+          ids.tech2,
+          `select operation from os_order_available_actions('${order}')`,
+        )
+      ).rows,
+      [
+        { operation: "ADD_SERVICE_ENTRY" },
+        { operation: "WAIT_INFORMATION" },
+        { operation: "CANCEL" },
+      ],
+    );
     await assert.rejects(
       asUser(
         ids.tech2,
@@ -191,11 +283,34 @@ test("operações canônicas validam estado, autorização, versão e atomicidad
         '${order}',6,'atendimento','Diagnóstico e correção registrados',now()
       )`,
     );
+    assert.deepEqual(
+      (
+        await asUser(
+          ids.tech2,
+          `select operation from os_order_available_actions('${order}')`,
+        )
+      ).rows,
+      [
+        { operation: "ADD_SERVICE_ENTRY" },
+        { operation: "WAIT_INFORMATION" },
+        { operation: "COMPLETE" },
+        { operation: "CANCEL" },
+      ],
+    );
     await asUser(
       ids.tech2,
       `select os_wait_for_information(
         '${order}',7,'material','Aguardando material necessário'
       )`,
+    );
+    assert.deepEqual(
+      (
+        await asUser(
+          ids.tech2,
+          `select operation from os_order_available_actions('${order}')`,
+        )
+      ).rows,
+      [{ operation: "RESUME" }, { operation: "CANCEL" }],
     );
     assert.deepEqual(
       (
@@ -220,6 +335,15 @@ test("operações canônicas validam estado, autorização, versão e atomicidad
     await asUser(
       ids.tech2,
       `select os_complete_order('${order}',9,'Equipamento normalizado')`,
+    );
+    assert.deepEqual(
+      (
+        await asUser(
+          ids.tech2,
+          `select operation from os_order_available_actions('${order}')`,
+        )
+      ).rows,
+      [{ operation: "REOPEN" }],
     );
     await assert.rejects(
       asUser(

@@ -1,23 +1,43 @@
 import { addMessage } from "@/app/actions";
 import { date } from "@/components/ui";
 import { fieldLimits, queryLimits } from "@/lib/application-config";
-import type { OrderEvent, OrderMessage } from "./types";
+import type {
+  OrderEvent,
+  OrderMessage,
+  OrderServiceEntryView,
+} from "./types";
 
 export function OrderActivity({
   id,
   userId,
   events,
   messages,
+  serviceEntries,
   canPost,
 }: {
   id: string;
   userId: string;
   events: OrderEvent[];
   messages: OrderMessage[];
+  serviceEntries: OrderServiceEntryView[];
   canPost: boolean;
 }) {
   return (
     <>
+      {serviceEntries.length > 0 && (
+        <section className="card">
+          <h2>Registros de atendimento</h2>
+          <div className="timeline">
+            {serviceEntries.map((entry) => (
+              <article key={entry.id}>
+                <strong>{entry.entry_type}</strong>
+                <small>Atendimento em {date(entry.serviced_at)}</small>
+                <p>{entry.description}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
       <section className="card">
         <h2>Histórico de situações</h2>
         <div className="timeline">
