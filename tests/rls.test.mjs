@@ -22,6 +22,29 @@ const relationalRollback = await fs.readFile(
   ),
   "utf8",
 );
+const orderFlowBackfill = await fs.readFile(
+  new URL(
+    "../supabase/backfills/202609240008_order_flow_backfill.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const [orderFlowPreflight, orderFlowValidation] = await Promise.all([
+  fs.readFile(
+    new URL(
+      "../supabase/backfills/202609240008_order_flow_preflight.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+  fs.readFile(
+    new URL(
+      "../supabase/backfills/202609240008_order_flow_validation.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+]);
 test("migration e RLS isolam unidades, identidades, operações e anexos", async () => {
   const db = new PGlite();
   try {
@@ -855,6 +878,87 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
       "select payload from os_import_records where source='seed/ABERTURA_OS' order by source_id",
     );
     assert.equal(archived.rows.length, 5);
+
+    const backfillTriage = "00000000-0000-4000-a000-000000000120";
+    const backfillWaiting = "00000000-0000-4000-a000-000000000121";
+    await db.exec("reset role; select set_config('request.jwt.claim.sub','',false);");
+    await db.query(
+      `insert into os_orders(
+        id,legacy_id,unit_id,opened_by,responsible_id,category_id,
+        title,status,opened_at
+      ) values
+      ('${backfillTriage}','BF-TRIAGE','${unitA}','${admin}','${tech}','${cat}',
+       'Backfill triagem','Em análise','2024-05-10T12:00:00Z'),
+      ('${backfillWaiting}','BF-WAIT','${unitA}','${admin}','${tech}','${cat}',
+       'Backfill espera','Aguardando material','2023-06-11T12:00:00Z')`,
+    );
+    await db.exec(orderFlowPreflight);
+    await db.exec(orderFlowBackfill);
+    assert.deepEqual(
+      (
+        await db.query(
+          `select id,status,waiting_reason,protocol_year,
+             protocol_code = protocol::text as code_preserves_protocol,legacy_id
+           from os_orders
+           where id in ('${backfillTriage}','${backfillWaiting}')
+           order by id`,
+        )
+      ).rows,
+      [
+        {
+          id: backfillTriage,
+          status: "Em triagem",
+          waiting_reason: null,
+          protocol_year: 2024,
+          code_preserves_protocol: true,
+          legacy_id: "BF-TRIAGE",
+        },
+        {
+          id: backfillWaiting,
+          status: "Aguardando informação",
+          waiting_reason: "material",
+          protocol_year: 2023,
+          code_preserves_protocol: true,
+          legacy_id: "BF-WAIT",
+        },
+      ],
+    );
+    const firstBackfillEvents = Number(
+      (
+        await db.query(
+          "select count(*)::integer as count from os_order_events where event_type='workflow_backfill'",
+        )
+      ).rows[0].count,
+    );
+    const firstBackfillExceptions = Number(
+      (
+        await db.query(
+          "select count(*)::integer as count from os_audit where entity='os_order_flow_backfill'",
+        )
+      ).rows[0].count,
+    );
+    await db.exec(orderFlowBackfill);
+    assert.equal(
+      Number(
+        (
+          await db.query(
+            "select count(*)::integer as count from os_order_events where event_type='workflow_backfill'",
+          )
+        ).rows[0].count,
+      ),
+      firstBackfillEvents,
+    );
+    assert.equal(
+      Number(
+        (
+          await db.query(
+            "select count(*)::integer as count from os_audit where entity='os_order_flow_backfill'",
+          )
+        ).rows[0].count,
+      ),
+      firstBackfillExceptions,
+    );
+    await db.exec(orderFlowValidation);
 
     await db.exec("reset role");
     await db.exec(relationalRollback);
