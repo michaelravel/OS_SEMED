@@ -9,30 +9,44 @@ export const statuses = [
   "Cancelada",
 ] as const;
 export type OrderStatus = (typeof statuses)[number];
+export const progressStatuses = [
+  "Aberta",
+  "Em análise",
+  "Em execução",
+  "Aguardando material",
+  "Aguardando deslocamento/logística",
+] as const;
 export const priorities = ["Baixa", "Normal", "Alta", "Urgente"] as const;
 export type OrderPriority = (typeof priorities)[number];
 export const terminalStatuses = ["Concluída", "Cancelada"] as const;
-export const statusTransitions: Record<OrderStatus | "A conferir", OrderStatus[]> = {
-  "A conferir": ["Aberta"],
-  Aberta: ["Em análise", "Cancelada"],
-  "Em análise": [
-    "Em execução",
-    "Aguardando material",
-    "Aguardando deslocamento/logística",
-    "Cancelada",
-  ],
-  "Em execução": [
-    "Em análise",
-    "Aguardando material",
-    "Aguardando deslocamento/logística",
-    "Concluída",
-    "Cancelada",
-  ],
-  "Aguardando material": ["Em execução", "Cancelada"],
-  "Aguardando deslocamento/logística": ["Em execução", "Cancelada"],
-  Concluída: ["Em análise"],
-  Cancelada: ["Aberta"],
-};
+export const workflowLimits = {
+  justificationMin: 3,
+  justificationMax: 2000,
+  solutionMin: 3,
+  solutionMax: 5000,
+} as const;
+const workflowId = z.uuid();
+export const advanceOrderSchema = z.object({
+  id: workflowId,
+  status: z.enum(progressStatuses),
+  reason: z.string().trim().max(workflowLimits.justificationMax),
+});
+export const completeOrderSchema = z.object({
+  id: workflowId,
+  solution: z
+    .string()
+    .trim()
+    .min(workflowLimits.solutionMin)
+    .max(workflowLimits.solutionMax),
+});
+export const justifyOrderSchema = z.object({
+  id: workflowId,
+  justification: z
+    .string()
+    .trim()
+    .min(workflowLimits.justificationMin)
+    .max(workflowLimits.justificationMax),
+});
 export const roles = ["admin", "gestor", "solicitante", "responsavel"] as const;
 export type Role = (typeof roles)[number];
 export type Membership = {
@@ -66,6 +80,7 @@ export type Order = {
   status: string;
   priority: OrderPriority;
   status_reason: string;
+  resolution: string | null;
   unit_id: string | null;
   opened_by: string | null;
   responsible_id: string | null;
@@ -75,6 +90,7 @@ export type Order = {
   opened_at: string | null;
   completed_at: string | null;
   cancelled_at: string | null;
+  reopened_at: string | null;
   active: boolean;
 };
 export const orderSchema = z.object({

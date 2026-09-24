@@ -76,6 +76,22 @@ export type Database = {
         Args: { target: string; next_status: string; reason: string };
         Returns: undefined;
       };
+      os_complete_order: {
+        Args: { target: string; solution: string };
+        Returns: undefined;
+      };
+      os_cancel_order: {
+        Args: { target: string; justification: string };
+        Returns: undefined;
+      };
+      os_reopen_order: {
+        Args: { target: string; justification: string };
+        Returns: undefined;
+      };
+      os_order_available_actions: {
+        Args: { target: string };
+        Returns: { next_status: string; operation: string }[];
+      };
       os_assign_order: {
         Args: {
           target: string;

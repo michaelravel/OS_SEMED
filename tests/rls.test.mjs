@@ -41,6 +41,8 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
       orderB,
       cat,
     ] = ids;
+    const legacyOrder = "00000000-0000-4000-a000-000000000100";
+    const legacyClosed = "00000000-0000-4000-a000-000000000101";
     await db.exec(`insert into auth.users(id) values ${ids
       .slice(0, 7)
       .map((id) => `('${id}')`)
@@ -52,9 +54,34 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
       ('${admin}',null,'admin'),('${owner}','${unitA}','solicitante'),('${other}','${unitB}','solicitante'),
       ('${tech}','${unitA}','responsavel'),('${manager}',null,'gestor'),('${schoolManager}','${unitA}','gestor');
       insert into os_orders(id,unit_id,opened_by,responsible_id,category_id,title) values
-      ('${orderA}','${unitA}','${owner}','${tech}','${cat}','Ordem A'),('${orderB}','${unitB}','${other}',null,'${cat}','Ordem B');`);
+      ('${orderA}','${unitA}','${owner}','${tech}','${cat}','Ordem A'),('${orderB}','${unitB}','${other}',null,'${cat}','Ordem B');
+      insert into os_orders(id,title,status) values
+      ('${legacyOrder}','Importada pendente','A conferir'),
+      ('${legacyClosed}','Encerrada legada','Concluída');`);
     // Simula a atualização de um banco já populado e valida o backfill.
     await db.exec(migrations.slice(1).join("\n"));
+    const legacyRows = await db.query(
+      `select id,status,unit_id,opened_by,category_id,resolution
+       from os_orders where id in ('${legacyOrder}','${legacyClosed}') order by id`,
+    );
+    assert.deepEqual(legacyRows.rows, [
+      {
+        id: legacyOrder,
+        status: "A conferir",
+        unit_id: null,
+        opened_by: null,
+        category_id: null,
+        resolution: null,
+      },
+      {
+        id: legacyClosed,
+        status: "Concluída",
+        unit_id: null,
+        opened_by: null,
+        category_id: null,
+        resolution: null,
+      },
+    ]);
     async function asUser(id, sql) {
       await db.exec(
         `reset role; set role authenticated; select set_config('request.jwt.claim.sub','${id}',false);`,
@@ -65,8 +92,18 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
       (await asUser(id, "select id from os_orders order by id")).rows.map(
         (r) => r.id,
       );
-    assert.deepEqual(await visible(admin), [orderA, orderB]);
-    assert.deepEqual(await visible(manager), [orderA, orderB]);
+    assert.deepEqual(await visible(admin), [
+      orderA,
+      orderB,
+      legacyOrder,
+      legacyClosed,
+    ]);
+    assert.deepEqual(await visible(manager), [
+      orderA,
+      orderB,
+      legacyOrder,
+      legacyClosed,
+    ]);
     assert.deepEqual(await visible(owner), [orderA]);
     assert.deepEqual(await visible(other), [orderB]);
     assert.deepEqual(await visible(tech), [orderA]);
@@ -86,6 +123,35 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
         `insert into os_orders(unit_id,opened_by,title) values('${unitB}','${owner}','Invasão')`,
       ),
     );
+    assert.equal(
+      (
+        await asUser(
+          admin,
+          `select * from os_order_available_actions('${legacyOrder}')`,
+        )
+      ).rows.length,
+      0,
+    );
+    await assert.rejects(
+      asUser(admin, `select os_change_status('${legacyOrder}','Aberta','')`),
+    );
+    await asUser(
+      admin,
+      `select os_assign_order('${legacyOrder}','${unitA}',null,'${owner}','${cat}')`,
+    );
+    assert.deepEqual(
+      (
+        await asUser(
+          admin,
+          `select next_status,operation from os_order_available_actions('${legacyOrder}')`,
+        )
+      ).rows,
+      [{ next_status: "Aberta", operation: "advance" }],
+    );
+    await asUser(
+      admin,
+      `select os_change_status('${legacyOrder}','Aberta','')`,
+    );
     await assert.rejects(
       asUser(
         owner,
@@ -98,16 +164,39 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
         `update os_orders set title='Alterada' where id='${orderA}' returning id`,
       ),
     );
+    assert.deepEqual(
+      (
+        await asUser(
+          admin,
+          `select next_status,operation from os_order_available_actions('${orderA}')`,
+        )
+      ).rows,
+      [
+        { next_status: "Em análise", operation: "advance" },
+        { next_status: "Cancelada", operation: "cancel" },
+      ],
+    );
     await asUser(tech, `select os_change_status('${orderA}','Em análise','')`);
+    await asUser(
+      admin,
+      `select os_assign_order('${orderA}','${unitA}',null,'${owner}','${cat}')`,
+    );
+    await assert.rejects(
+      asUser(admin, `select os_change_status('${orderA}','Em execução','')`),
+    );
+    await asUser(
+      admin,
+      `select os_assign_order('${orderA}','${unitA}','${tech}','${owner}','${cat}')`,
+    );
     await asUser(tech, `select os_change_status('${orderA}','Em execução','')`);
     await assert.rejects(
-      asUser(tech, `select os_change_status('${orderB}','Concluída','Finalizada')`),
+      asUser(tech, `select os_complete_order('${orderB}','Finalizada')`),
     );
     await assert.rejects(
-      asUser(manager, `select os_change_status('${orderA}','Concluída','Finalizada')`),
+      asUser(manager, `select os_complete_order('${orderA}','Finalizada')`),
     );
     await assert.rejects(
-      asUser(owner, `select os_change_status('${orderA}','Concluída','Finalizada')`),
+      asUser(owner, `select os_complete_order('${orderA}','Finalizada')`),
     );
     await assert.rejects(
       asUser(admin, `select os_change_status('${orderA}','INVÁLIDO','')`),
@@ -116,7 +205,45 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
       asUser(admin, `select os_change_status('${orderA}','Aberta','')`),
     );
     await assert.rejects(
-      asUser(admin, `select os_change_status('${orderA}','Concluída','')`),
+      asUser(
+        admin,
+        `select os_change_status('${orderA}','Concluída','Finalizada')`,
+      ),
+    );
+    await assert.rejects(
+      asUser(admin, `select os_complete_order('${orderA}','')`),
+    );
+    await assert.rejects(
+      asUser(admin, `select os_cancel_order('${orderB}','')`),
+    );
+    await assert.rejects(
+      asUser(
+        admin,
+        `select os_change_status('${orderB}','Cancelada','Duplicada')`,
+      ),
+    );
+    await asUser(
+      admin,
+      `select os_cancel_order('${orderB}','Solicitação duplicada')`,
+    );
+    await assert.rejects(
+      asUser(admin, `select os_change_status('${orderB}','Aberta','Revisão')`),
+    );
+    await assert.rejects(
+      asUser(admin, `select os_reopen_order('${orderB}','')`),
+    );
+    await asUser(
+      admin,
+      `select os_reopen_order('${orderB}','Cancelamento revisto')`,
+    );
+    assert.deepEqual(
+      (
+        await asUser(
+          admin,
+          `select status,cancelled_at,reopened_at is not null as reopened from os_orders where id='${orderB}'`,
+        )
+      ).rows,
+      [{ status: "Aberta", cancelled_at: null, reopened: true }],
     );
     await asUser(
       owner,
@@ -172,7 +299,22 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
     );
     await asUser(
       admin,
-      `select os_change_status('${orderA}','Concluída','Atendimento validado')`,
+      `select os_complete_order('${orderA}','Atendimento validado')`,
+    );
+    assert.deepEqual(
+      (
+        await asUser(
+          admin,
+          `select status,resolution,completed_at is not null as completed from os_orders where id='${orderA}'`,
+        )
+      ).rows,
+      [
+        {
+          status: "Concluída",
+          resolution: "Atendimento validado",
+          completed: true,
+        },
+      ],
     );
     await assert.rejects(
       asUser(
@@ -216,6 +358,53 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
     assert.equal(unsecured.rows.length, 0);
     // Executa a conversão real no schema, incluindo reexecução sem sobrescrita.
     await db.exec("select set_config('request.jwt.claim.sub','',false);");
+    await assert.rejects(
+      db.query(
+        `insert into os_orders(
+          id,unit_id,opened_by,responsible_id,category_id,title,status
+        ) values(
+          '00000000-0000-4000-a000-000000000102','${unitA}','${owner}',
+          '${tech}','${cat}','Conclusão inválida','Concluída'
+        )`,
+      ),
+    );
+    await assert.rejects(
+      db.query(
+        `insert into os_orders(
+          id,unit_id,opened_by,responsible_id,category_id,title,status
+        ) values(
+          '00000000-0000-4000-a000-000000000106','${unitA}','${owner}',
+          '${owner}','${cat}','Responsável sem vínculo','Em execução'
+        )`,
+      ),
+    );
+    await assert.rejects(
+      db.query(
+        `insert into os_orders(id,title,status) values(
+          '00000000-0000-4000-a000-000000000103','Sem conciliação','Aberta'
+        )`,
+      ),
+    );
+    await assert.rejects(
+      db.query(
+        `insert into os_orders(
+          id,unit_id,opened_by,category_id,title,status
+        ) values(
+          '00000000-0000-4000-a000-000000000104','${unitA}','${owner}',
+          '${cat}','Sem responsável','Em execução'
+        )`,
+      ),
+    );
+    await assert.rejects(
+      db.query(
+        `insert into os_orders(
+          id,unit_id,opened_by,category_id,title,status,cancelled_at
+        ) values(
+          '00000000-0000-4000-a000-000000000105','${unitA}','${owner}',
+          '${cat}','Sem justificativa','Cancelada',now()
+        )`,
+      ),
+    );
     const seedText = await fs.readFile(
       new URL("../assets/seed-data.js", import.meta.url),
       "utf8",
@@ -255,6 +444,27 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
       (await db.query("select id from os_orders where legacy_id is not null"))
         .rows.length,
       5,
+    );
+    assert.equal(
+      (
+        await db.query(
+          "select id from os_orders where legacy_id is not null and status='A conferir' and opened_by is null and category_id is null",
+        )
+      ).rows.length,
+      5,
+    );
+    const importedOrder = imported.orders[0].id;
+    assert.equal(
+      (
+        await asUser(
+          admin,
+          `select * from os_order_available_actions('${importedOrder}')`,
+        )
+      ).rows.length,
+      0,
+    );
+    await assert.rejects(
+      asUser(admin, `select os_change_status('${importedOrder}','Aberta','')`),
     );
     assert.equal(
       (await db.query("select id from os_catalogs")).rows.length,

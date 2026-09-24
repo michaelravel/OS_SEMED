@@ -54,6 +54,8 @@ Audit registra autor, data, ação, entidade, ID, anterior e posterior de ordens
 
 ## Sequência segura de ativação
 
+Antes de iniciar, seguir o [runbook de backup, recuperação e rollback](runbook-backup-recuperacao.md) e considerar o backup não comprovado enquanto uma restauração isolada não tiver sido testada.
+
 1. Fazer backup do banco de destino e identificar o ambiente. Executar `supabase/preflight.sql` (somente leitura) e conferir o histórico remoto. Parar se já existirem objetos `os_*` incompatíveis ou o bucket `os-attachments`.
 2. Aplicar, em ordem, os arquivos de `supabase/migrations/` pelo fluxo de migrations do projeto, primeiro em homologação. Não executar reset. Confirmar tabelas, grants, RLS, funções e bucket privado após cada migration.
 3. Executar `npm run data:prepare`, conferir hashes/contagens/avisos. Configurar `.env.local` a partir de `.env.example`, sem versionar: URL, chave **publishable** e chave administrativa **somente local** para a importação. Nunca copiar chaves entre projetos.

@@ -3,15 +3,17 @@ import { z } from "zod";
 import { session } from "@/lib/session";
 import {
   priorities,
-  statusTransitions,
   terminalStatuses,
+  workflowLimits,
   type Catalog,
   type Order,
-  type OrderStatus,
 } from "@/lib/domain";
 import { Heading, Badge, Notice, date } from "@/components/ui";
 import {
   changeStatus,
+  completeOrder,
+  cancelOrder,
+  reopenOrder,
   assignOrder,
   addMessage,
   uploadAttachment,
@@ -31,15 +33,22 @@ export default async function OrderPage({
   const { data, error } = await db
     .from("os_orders")
     .select(
-      "id,protocol,legacy_id,title,status,priority,status_reason,unit_id,opened_by,responsible_id,category_id,details,created_at,opened_at,completed_at,cancelled_at,active",
+      "id,protocol,legacy_id,title,status,priority,status_reason,resolution,unit_id,opened_by,responsible_id,category_id,details,created_at,opened_at,completed_at,cancelled_at,reopened_at,active",
     )
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error("Falha ao consultar ordem");
   if (!data) notFound();
   const o = data as Order;
-  const [messages, attachments, units, profiles, catalogs, events] =
-    await Promise.all([
+  const [
+    messages,
+    attachments,
+    units,
+    profiles,
+    catalogs,
+    events,
+    availableActions,
+  ] = await Promise.all([
     db
       .from("os_messages")
       .select("id,body,created_at,author_id")
@@ -68,8 +77,19 @@ export default async function OrderPage({
       .eq("order_id", id)
       .order("created_at", { ascending: false })
       .limit(100),
+    db.rpc("os_order_available_actions", { target: id }),
   ]);
-  if ([messages, attachments, units, profiles, catalogs, events].some((r) => r.error))
+  if (
+    [
+      messages,
+      attachments,
+      units,
+      profiles,
+      catalogs,
+      events,
+      availableActions,
+    ].some((result) => result.error)
+  )
     throw new Error("Falha ao consultar detalhes");
   const assigned =
     memberships.some(
@@ -90,8 +110,19 @@ export default async function OrderPage({
   const catalogRows = (catalogs.data ?? []) as Catalog[];
   const catalogName = (value: string) =>
     catalogRows.find((catalog) => catalog.id === value)?.name ?? value;
-  const nextStatuses =
-    statusTransitions[o.status as OrderStatus | "A conferir"] ?? [];
+  const workflowActions = availableActions.data ?? [];
+  const nextStatuses = workflowActions.filter(
+    (action) => action.operation === "advance",
+  );
+  const canComplete = workflowActions.some(
+    (action) => action.operation === "complete",
+  );
+  const canCancel = workflowActions.some(
+    (action) => action.operation === "cancel",
+  );
+  const canReopen = workflowActions.some(
+    (action) => action.operation === "reopen",
+  );
   return (
     <>
       <Heading
@@ -111,10 +142,16 @@ export default async function OrderPage({
             <dt>Prioridade</dt>
             <dd>{o.priority}</dd>
             <dt>Classificação</dt>
-            <dd>{
-              catalogRows.find((catalog) => catalog.id === o.category_id)?.name ??
-              "Aguardando conciliação"
-            }</dd>
+            <dd>
+              {catalogRows.find((catalog) => catalog.id === o.category_id)
+                ?.name ?? "Aguardando conciliação"}
+            </dd>
+            {o.resolution && (
+              <>
+                <dt>Solução aplicada</dt>
+                <dd>{o.resolution}</dd>
+              </>
+            )}
             {Object.entries(o.details).map(([k, v]) => (
               <div key={k}>
                 <dt>
@@ -138,15 +175,17 @@ export default async function OrderPage({
               </div>
             ))}
           </dl>
-          {(admin || assigned) && nextStatuses.length > 0 && (
+          {nextStatuses.length > 0 && (
             <form action={changeStatus} className="filters">
               <input type="hidden" name="id" value={id} />
               <label>
                 Situação
                 <select name="status" defaultValue="" required>
                   <option value="">Selecione a próxima situação</option>
-                  {nextStatuses.map((s) => (
-                    <option key={s}>{s}</option>
+                  {nextStatuses.map((action) => (
+                    <option key={action.next_status}>
+                      {action.next_status}
+                    </option>
                   ))}
                 </select>
               </label>
@@ -157,9 +196,58 @@ export default async function OrderPage({
               <button>Atualizar status</button>
             </form>
           )}
-          {closed && (
+          {canComplete && (
+            <form action={completeOrder}>
+              <input type="hidden" name="id" value={id} />
+              <label>
+                Solução aplicada
+                <textarea
+                  name="solution"
+                  required
+                  minLength={workflowLimits.solutionMin}
+                  maxLength={workflowLimits.solutionMax}
+                  rows={4}
+                />
+              </label>
+              <button>Concluir ordem</button>
+            </form>
+          )}
+          {canCancel && (
+            <form action={cancelOrder}>
+              <input type="hidden" name="id" value={id} />
+              <label>
+                Justificativa do cancelamento
+                <textarea
+                  name="justification"
+                  required
+                  minLength={workflowLimits.justificationMin}
+                  maxLength={workflowLimits.justificationMax}
+                  rows={3}
+                />
+              </label>
+              <button>Cancelar ordem</button>
+            </form>
+          )}
+          {canReopen && (
+            <form action={reopenOrder}>
+              <input type="hidden" name="id" value={id} />
+              <label>
+                Justificativa da reabertura
+                <textarea
+                  name="justification"
+                  required
+                  minLength={workflowLimits.justificationMin}
+                  maxLength={workflowLimits.justificationMax}
+                  rows={3}
+                />
+              </label>
+              <button>Reabrir ordem</button>
+            </form>
+          )}
+          {o.status === "A conferir" && workflowActions.length === 0 && (
             <p className="notice">
-              Ordem encerrada. Informe um motivo para reabri-la.
+              Concilie unidade, solicitante e classificação antes de liberar
+              esta ordem.
             </p>
           )}
         </section>

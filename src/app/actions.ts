@@ -6,11 +6,13 @@ import { supabase, configured } from "@/lib/supabase";
 import { session } from "@/lib/session";
 import {
   allowedMimes,
+  advanceOrderSchema,
   catalogFields,
+  completeOrderSchema,
+  justifyOrderSchema,
   orderSchema,
   priorities,
   roles,
-  statuses,
 } from "@/lib/domain";
 
 function text(form: FormData, key: string) {
@@ -106,19 +108,59 @@ export async function createOrder(form: FormData) {
   revalidatePath("/painel");
   redirect(`/ordens/${data.id}`);
 }
+function refreshOrder(id: string) {
+  revalidatePath(`/ordens/${id}`);
+  revalidatePath("/ordens");
+  revalidatePath("/painel");
+}
 export async function changeStatus(form: FormData) {
   const { db } = await session();
-  const id = z.uuid().parse(text(form, "id"));
-  const status = z.enum(statuses).parse(text(form, "status"));
-  const reason = z.string().trim().max(2000).parse(text(form, "reason"));
+  const input = advanceOrderSchema.safeParse(Object.fromEntries(form));
+  if (!input.success) failed("/ordens");
+  const { id, status, reason } = input.data;
   const { error } = await db.rpc("os_change_status", {
     target: id,
     next_status: status,
     reason,
   });
   if (error) failed(`/ordens/${id}`);
-  revalidatePath(`/ordens/${id}`);
-  revalidatePath("/painel");
+  refreshOrder(id);
+}
+export async function completeOrder(form: FormData) {
+  const { db } = await session();
+  const input = completeOrderSchema.safeParse(Object.fromEntries(form));
+  if (!input.success) failed("/ordens");
+  const { id, solution } = input.data;
+  const { error } = await db.rpc("os_complete_order", {
+    target: id,
+    solution,
+  });
+  if (error) failed(`/ordens/${id}`);
+  refreshOrder(id);
+}
+export async function cancelOrder(form: FormData) {
+  const { db } = await session();
+  const input = justifyOrderSchema.safeParse(Object.fromEntries(form));
+  if (!input.success) failed("/ordens");
+  const { id, justification } = input.data;
+  const { error } = await db.rpc("os_cancel_order", {
+    target: id,
+    justification,
+  });
+  if (error) failed(`/ordens/${id}`);
+  refreshOrder(id);
+}
+export async function reopenOrder(form: FormData) {
+  const { db } = await session();
+  const input = justifyOrderSchema.safeParse(Object.fromEntries(form));
+  if (!input.success) failed("/ordens");
+  const { id, justification } = input.data;
+  const { error } = await db.rpc("os_reopen_order", {
+    target: id,
+    justification,
+  });
+  if (error) failed(`/ordens/${id}`);
+  refreshOrder(id);
 }
 export async function editOrderDetails(form: FormData) {
   const { db, admin } = await session();
