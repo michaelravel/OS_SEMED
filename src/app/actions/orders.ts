@@ -28,7 +28,7 @@ function refreshOrder(id: string) {
 export async function createOrder(form: FormData) {
   const { db, user } = await session();
   const input = orderSchema.safeParse(Object.fromEntries(form));
-  if (!input.success) actionFailed("/ordens/nova");
+  if (!input.success) return actionFailed("/ordens/nova");
   const {
     title,
     unit_id,
@@ -40,7 +40,7 @@ export async function createOrder(form: FormData) {
     ...details
   } = input.data;
   if (details.occurred_at && !Number.isFinite(Date.parse(details.occurred_at)))
-    actionFailed("/ordens/nova");
+    return actionFailed("/ordens/nova");
   const { data: category, error: categoryError } = await db
     .from("os_catalogs")
     .select("id")
@@ -48,7 +48,7 @@ export async function createOrder(form: FormData) {
     .eq("kind", "logistics")
     .eq("active", true)
     .single();
-  if (categoryError || !category) actionFailed("/ordens/nova");
+  if (categoryError || !category) return actionFailed("/ordens/nova");
   const { data, error } = await db
     .from("os_orders")
     .insert({
@@ -66,7 +66,7 @@ export async function createOrder(form: FormData) {
     })
     .select("id")
     .single();
-  if (error || !data) actionFailed("/ordens/nova");
+  if (error || !data) return actionFailed("/ordens/nova");
   revalidatePath("/painel");
   redirect(`/ordens/${data.id}`);
 }
@@ -74,44 +74,44 @@ export async function createOrder(form: FormData) {
 export async function changeStatus(form: FormData) {
   const { db } = await session();
   const input = advanceOrderSchema.safeParse(Object.fromEntries(form));
-  if (!input.success) actionFailed("/ordens");
+  if (!input.success) return actionFailed("/ordens");
   const { id, status, reason } = input.data;
   const { error } = await db.rpc("os_change_status", {
     target: id,
     next_status: status,
     reason,
   });
-  if (error) actionFailed(`/ordens/${id}`);
+  if (error) return actionFailed(`/ordens/${id}`);
   refreshOrder(id);
 }
 
 export async function completeOrder(form: FormData) {
   const { db } = await session();
   const input = completeOrderSchema.safeParse(Object.fromEntries(form));
-  if (!input.success) actionFailed("/ordens");
+  if (!input.success) return actionFailed("/ordens");
   const { id, solution } = input.data;
   const { error } = await db.rpc("os_complete_order", { target: id, solution });
-  if (error) actionFailed(`/ordens/${id}`);
+  if (error) return actionFailed(`/ordens/${id}`);
   refreshOrder(id);
 }
 
 export async function cancelOrder(form: FormData) {
   const { db } = await session();
   const input = justifyOrderSchema.safeParse(Object.fromEntries(form));
-  if (!input.success) actionFailed("/ordens");
+  if (!input.success) return actionFailed("/ordens");
   const { id, justification } = input.data;
   const { error } = await db.rpc("os_cancel_order", { target: id, justification });
-  if (error) actionFailed(`/ordens/${id}`);
+  if (error) return actionFailed(`/ordens/${id}`);
   refreshOrder(id);
 }
 
 export async function reopenOrder(form: FormData) {
   const { db } = await session();
   const input = justifyOrderSchema.safeParse(Object.fromEntries(form));
-  if (!input.success) actionFailed("/ordens");
+  if (!input.success) return actionFailed("/ordens");
   const { id, justification } = input.data;
   const { error } = await db.rpc("os_reopen_order", { target: id, justification });
-  if (error) actionFailed(`/ordens/${id}`);
+  if (error) return actionFailed(`/ordens/${id}`);
   refreshOrder(id);
 }
 
@@ -128,13 +128,13 @@ export async function editOrderDetails(form: FormData) {
       priority: z.enum(priorities),
     })
     .safeParse(Object.fromEntries(form));
-  if (!input.success) actionFailed(`/ordens/${id}`);
+  if (!input.success) return actionFailed(`/ordens/${id}`);
   const { data: previous, error: readError } = await db
     .from("os_orders")
     .select("details")
     .eq("id", id)
     .single();
-  if (readError || !previous) actionFailed(`/ordens/${id}`);
+  if (readError || !previous) return actionFailed(`/ordens/${id}`);
   const { title, priority, ...details } = input.data;
   const { error } = await db.rpc("os_edit_order", {
     target: id,
@@ -142,7 +142,7 @@ export async function editOrderDetails(form: FormData) {
     new_priority: priority,
     detail_patch: { ...previous.details, ...details },
   });
-  if (error) actionFailed(`/ordens/${id}`);
+  if (error) return actionFailed(`/ordens/${id}`);
   revalidatePath(`/ordens/${id}`);
 }
 
@@ -168,7 +168,7 @@ export async function assignOrder(form: FormData) {
       .eq("role", role)
       .eq("active", true)
       .limit(1);
-    if (error || !data?.length) actionFailed(`/ordens/${id}`);
+    if (error || !data?.length) return actionFailed(`/ordens/${id}`);
   }
   const { error } = await db.rpc("os_assign_order", {
     target: id,
@@ -177,7 +177,7 @@ export async function assignOrder(form: FormData) {
     target_opened_by: author || null,
     target_category: category,
   });
-  if (error) actionFailed(`/ordens/${id}`);
+  if (error) return actionFailed(`/ordens/${id}`);
   revalidatePath(`/ordens/${id}`);
 }
 
@@ -193,6 +193,6 @@ export async function addMessage(form: FormData) {
   const { error } = await db
     .from("os_messages")
     .insert({ order_id: id, author_id: user.id, body });
-  if (error) actionFailed(`/ordens/${id}`);
+  if (error) return actionFailed(`/ordens/${id}`);
   revalidatePath(`/ordens/${id}`);
 }

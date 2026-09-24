@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 import { configured, supabase } from "./supabase";
 import { isAdmin, type Membership } from "./domain";
+import { ServerOperationError } from "./errors";
 export const session = cache(async () => {
   if (!configured()) redirect("/configuracao");
   const db = await supabase();
@@ -17,7 +18,10 @@ export const session = cache(async () => {
     .eq("user_id", user.id)
     .eq("active", true);
   if (membershipError)
-    throw new Error("Não foi possível verificar os vínculos.");
+    throw new ServerOperationError(
+      "MEMBERSHIP_QUERY_FAILED",
+      "Não foi possível verificar os vínculos.",
+    );
   const memberships = (data ?? []) as Membership[];
   if (!memberships.length) redirect("/sem-acesso");
   return { db, user, memberships, admin: isAdmin(memberships) };

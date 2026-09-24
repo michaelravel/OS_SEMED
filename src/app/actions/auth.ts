@@ -13,10 +13,10 @@ export async function login(form: FormData) {
       password: z.string().min(1).max(fieldLimits.password),
     })
     .safeParse(Object.fromEntries(form));
-  if (!input.success) actionFailed("/login");
+  if (!input.success) return actionFailed("/login");
   const db = await supabase();
   const { error } = await db.auth.signInWithPassword(input.data);
-  if (error) actionFailed("/login");
+  if (error) return actionFailed("/login");
   redirect("/painel");
 }
 

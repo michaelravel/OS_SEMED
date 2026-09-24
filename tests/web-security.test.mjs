@@ -6,10 +6,12 @@ import {
   isPrivateRoute,
 } from "../src/lib/web-security.ts";
 
-test("mantém somente login e configuração como rotas públicas", () => {
+test("mantém somente login, configuração e health check como rotas públicas", () => {
   assert.equal(isPrivateRoute("/login"), false);
   assert.equal(isPrivateRoute("/login/"), false);
   assert.equal(isPrivateRoute("/configuracao"), false);
+  assert.equal(isPrivateRoute("/api/health"), false);
+  assert.equal(isPrivateRoute("/api/health/"), false);
   assert.equal(isPrivateRoute("/"), true);
   assert.equal(isPrivateRoute("/painel"), true);
   assert.equal(isPrivateRoute("/ordens/123"), true);

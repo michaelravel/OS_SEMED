@@ -8,11 +8,9 @@ import { Badge, date } from "@/components/ui";
 import {
   workflowLimits,
   orderStatusNames,
-  type Catalog,
-  type Order,
   type OrderDetails,
 } from "@/lib/domain";
-import type { WorkflowAction } from "./types";
+import type { OrderCatalog, OrderDetail, WorkflowAction } from "./types";
 
 const detailLabels = {
   observation: "Observações",
@@ -28,8 +26,8 @@ export function OrderSummary({
   workflowActions,
 }: {
   id: string;
-  order: Order;
-  catalogs: Catalog[];
+  order: OrderDetail;
+  catalogs: OrderCatalog[];
   workflowActions: WorkflowAction[];
 }) {
   const catalogName = (value: string) =>

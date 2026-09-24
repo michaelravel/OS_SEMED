@@ -6,7 +6,12 @@ import { mapSeed } from "../scripts/import-lib.mjs";
 const migrationsDirectory = new URL("../supabase/migrations/", import.meta.url);
 const migrations = await Promise.all(
   (await fs.readdir(migrationsDirectory))
-    .filter((file) => file.endsWith(".sql"))
+    // pg_trgm não está disponível no PGlite; índices físicos são validados
+    // separadamente e não alteram as regras funcionais/RLS deste teste.
+    .filter(
+      (file) =>
+        file.endsWith(".sql") && !file.endsWith("_performance_indexes.sql"),
+    )
     .sort()
     .map((file) => fs.readFile(new URL(file, migrationsDirectory), "utf8")),
 );

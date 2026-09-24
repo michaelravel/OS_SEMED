@@ -1,16 +1,28 @@
 import { z } from "zod";
-import { fieldLimits, workflowLimits } from "./application-config";
+import { fieldLimits } from "./application-config";
+import {
+  canonicalOrderStatusNames,
+  compatibleOrderStatuses,
+  legacyOrderStatusNames,
+  orderCompletionSchema,
+  orderJustificationSchema,
+  priorities,
+  terminalOrderStatuses,
+  workflowLimits,
+  type CompatibleOrderStatus,
+  type OrderPriority,
+} from "./order-workflow";
 
-export { workflowLimits };
+export * from "./order-workflow";
+
+// Compatibilidade temporária com telas e RPCs anteriores à migration do novo
+// fluxo. Novos recursos devem consumir canonicalOrderStatusNames.
 export const orderStatusNames = {
-  pendingReview: "A conferir",
-  open: "Aberta",
-  analyzing: "Em análise",
-  executing: "Em execução",
-  waitingMaterial: "Aguardando material",
-  waitingLogistics: "Aguardando deslocamento/logística",
-  completed: "Concluída",
-  canceled: "Cancelada",
+  ...canonicalOrderStatusNames,
+  analyzing: legacyOrderStatusNames.analyzing,
+  executing: legacyOrderStatusNames.executing,
+  waitingMaterial: legacyOrderStatusNames.waitingMaterial,
+  waitingLogistics: legacyOrderStatusNames.waitingLogistics,
 } as const;
 export const pendingStatus = orderStatusNames.pendingReview;
 export const statuses = [
@@ -23,7 +35,7 @@ export const statuses = [
   orderStatusNames.canceled,
 ] as const;
 export const orderStatuses = [pendingStatus, ...statuses] as const;
-export type OrderStatus = (typeof orderStatuses)[number];
+export type OrderStatus = CompatibleOrderStatus;
 export const progressStatuses = [
   orderStatusNames.open,
   orderStatusNames.analyzing,
@@ -31,34 +43,15 @@ export const progressStatuses = [
   orderStatusNames.waitingMaterial,
   orderStatusNames.waitingLogistics,
 ] as const;
-export const priorities = ["Baixa", "Normal", "Alta", "Urgente"] as const;
-export type OrderPriority = (typeof priorities)[number];
-export const terminalStatuses = [
-  orderStatusNames.completed,
-  orderStatusNames.canceled,
-] as const;
+export const terminalStatuses = terminalOrderStatuses;
 const workflowId = z.uuid();
 export const advanceOrderSchema = z.object({
   id: workflowId,
   status: z.enum(progressStatuses),
   reason: z.string().trim().max(workflowLimits.justificationMax),
 });
-export const completeOrderSchema = z.object({
-  id: workflowId,
-  solution: z
-    .string()
-    .trim()
-    .min(workflowLimits.solutionMin)
-    .max(workflowLimits.solutionMax),
-});
-export const justifyOrderSchema = z.object({
-  id: workflowId,
-  justification: z
-    .string()
-    .trim()
-    .min(workflowLimits.justificationMin)
-    .max(workflowLimits.justificationMax),
-});
+export const completeOrderSchema = orderCompletionSchema;
+export const justifyOrderSchema = orderJustificationSchema;
 export const roleNames = {
   administrator: "admin",
   manager: "gestor",
@@ -129,7 +122,7 @@ export type OrderDetails = {
   [legacyField: string]: string | undefined;
 };
 export function isOrderStatus(value: string): value is OrderStatus {
-  return orderStatuses.includes(value as OrderStatus);
+  return compatibleOrderStatuses.includes(value as OrderStatus);
 }
 export type Order = {
   id: string;

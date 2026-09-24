@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { session } from "@/lib/session";
-import { canOpen, type Unit, type Catalog } from "@/lib/domain";
+import { canOpen } from "@/lib/domain";
 import { Heading, Notice } from "@/components/ui";
 import { OrderForm } from "@/components/order-form";
 import { queryLimits } from "@/lib/application-config";
@@ -16,13 +16,13 @@ export default async function NewOrder({
     await Promise.all([
       db
         .from("os_units")
-        .select("id,name,type,address,coordinates,active")
+        .select("id,name")
         .eq("active", true)
         .order("name")
         .limit(queryLimits.lookupRows),
       db
         .from("os_catalogs")
-        .select("id,legacy_id,kind,name,data,active")
+        .select("id,kind,name,data")
         .eq("active", true)
         .order("name")
         .limit(queryLimits.lookupRows),
@@ -39,11 +39,11 @@ export default async function NewOrder({
       />
       <Notice error={(await searchParams).erro} />
       <OrderForm
-        units={(units ?? []) as Unit[]}
+        units={units ?? []}
         categories={
-          (catalogs ?? []).filter((c) => c.kind === "logistics") as Catalog[]
+          (catalogs ?? []).filter((catalog) => catalog.kind === "logistics")
         }
-        catalogs={(catalogs ?? []) as Catalog[]}
+        catalogs={catalogs ?? []}
       />
     </>
   );

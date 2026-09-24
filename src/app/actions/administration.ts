@@ -26,7 +26,7 @@ export async function saveCatalog(form: FormData) {
     data[key] = z.string().trim().max(fieldLimits.catalogValue).parse(formText(form, key));
   if (data.link) {
     const url = z.url().parse(data.link);
-    if (!["https:", "http:"].includes(new URL(url).protocol)) actionFailed(`/cadastros/${catalogKind}`);
+    if (!["https:", "http:"].includes(new URL(url).protocol)) return actionFailed(`/cadastros/${catalogKind}`);
   }
   const { error } = await db.rpc("os_save_catalog", {
     target: id || null,
@@ -35,7 +35,7 @@ export async function saveCatalog(form: FormData) {
     catalog_data: data,
     catalog_active: form.get("active") === "on",
   });
-  if (error) actionFailed(`/cadastros/${catalogKind}`);
+  if (error) return actionFailed(`/cadastros/${catalogKind}`);
   revalidatePath(`/cadastros/${catalogKind}`);
   redirect(`/cadastros/${catalogKind}`);
 }
@@ -59,7 +59,7 @@ export async function saveUnit(form: FormData) {
     unit_coordinates: input.coordinates,
     unit_active: form.get("active") === "on",
   });
-  if (error) actionFailed("/unidades");
+  if (error) return actionFailed("/unidades");
   revalidatePath("/unidades");
   redirect("/unidades");
 }
@@ -76,23 +76,23 @@ export async function saveMembership(form: FormData) {
     role !== roleNames.administrator &&
     role !== roleNames.manager
   )
-    actionFailed("/usuarios");
-  if (unit && role === roleNames.administrator) actionFailed("/usuarios");
+    return actionFailed("/usuarios");
+  if (unit && role === roleNames.administrator) return actionFailed("/usuarios");
   const name = z.string().trim().min(1).max(fieldLimits.profileName).parse(formText(form, "name"));
   const active = form.get("active") === "on";
-  if (userId === user.id && !active) actionFailed("/usuarios");
+  if (userId === user.id && !active) return actionFailed("/usuarios");
   const id = formText(form, "id");
   if (id) z.uuid().parse(id);
   const current = id
     ? await db.from("os_memberships").select("id,user_id,role").eq("id", id).single()
     : null;
-  if (current?.error) actionFailed("/usuarios");
+  if (current?.error) return actionFailed("/usuarios");
 
   let error: unknown = null;
   if (role === roleNames.administrator) {
     if (!active) {
       if (!id || current?.data.role !== roleNames.administrator)
-        actionFailed("/usuarios");
+        return actionFailed("/usuarios");
       ({ error } = await db.rpc("os_revoke_admin", { target: id }));
     } else {
       ({ error } = await db.rpc("os_grant_admin", {
@@ -110,7 +110,7 @@ export async function saveMembership(form: FormData) {
       target_role: role, target_active: active, target_name: name,
     }));
   }
-  if (error) actionFailed("/usuarios");
+  if (error) return actionFailed("/usuarios");
   revalidatePath("/usuarios");
   redirect("/usuarios");
 }

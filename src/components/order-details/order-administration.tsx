@@ -1,7 +1,11 @@
 import { assignOrder, editOrderDetails } from "@/app/actions";
 import { fieldLimits } from "@/lib/application-config";
-import { priorities, type Catalog, type Order } from "@/lib/domain";
-import type { NamedOption } from "./types";
+import { priorities } from "@/lib/domain";
+import type {
+  NamedOption,
+  OrderCatalog,
+  OrderDetail,
+} from "./types";
 
 export function OrderAdministration({
   id,
@@ -11,10 +15,10 @@ export function OrderAdministration({
   catalogs,
 }: {
   id: string;
-  order: Order;
+  order: OrderDetail;
   units: NamedOption[];
   profiles: NamedOption[];
-  catalogs: Catalog[];
+  catalogs: OrderCatalog[];
 }) {
   const peopleFields = [
     ["responsible_id", "Responsável", order.responsible_id],

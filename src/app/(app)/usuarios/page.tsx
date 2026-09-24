@@ -17,8 +17,7 @@ export default async function Users({
   const p = await searchParams;
   const page = pageNumber(p.page);
   const range = pageRange(page);
-  const [profiles, units, memberships] = await Promise.all([
-    db.from("os_profiles").select("id,name").order("name").limit(queryLimits.lookupRows),
+  const [units, memberships] = await Promise.all([
     db.from("os_units").select("id,name").order("name").limit(queryLimits.lookupRows),
     db
       .from("os_memberships")
@@ -26,6 +25,16 @@ export default async function Users({
       .order("id")
       .range(range.from, range.to),
   ]);
+  const profileIds = [
+    ...new Set((memberships.data ?? []).map((membership) => membership.user_id)),
+  ];
+  const profiles = profileIds.length
+    ? await db
+        .from("os_profiles")
+        .select("id,name")
+        .in("id", profileIds)
+        .order("name")
+    : { data: [], error: null };
   ensureQueriesSucceeded(
     [profiles, units, memberships],
     "Falha ao consultar vínculos",

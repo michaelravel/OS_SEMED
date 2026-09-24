@@ -27,10 +27,3 @@ export const fieldLimits = {
   profileName: 200,
   message: 5_000,
 } as const;
-
-export const workflowLimits = {
-  justificationMin: 3,
-  justificationMax: 2_000,
-  solutionMin: 3,
-  solutionMax: 5_000,
-} as const;

@@ -23,10 +23,10 @@ export async function uploadAttachment(form: FormData) {
     file.size > Number(policy.max_file_bytes) ||
     !policy.allowed_mimes.includes(file.type) ||
     !isAttachmentMimeType(file.type)
-  ) actionFailed(`/ordens/${orderId}`);
+  ) return actionFailed(`/ordens/${orderId}`);
   const name = normalizeAttachmentName(file.name);
   if (!name || !attachmentExtensionMatches(name, file.type) ||
-      !(await attachmentContentMatches(file))) actionFailed(`/ordens/${orderId}`);
+      !(await attachmentContentMatches(file))) return actionFailed(`/ordens/${orderId}`);
   const id = crypto.randomUUID();
   const sha256 = await attachmentSha256(file);
   const { data: path, error: reserveError } = await db.rpc(
@@ -40,18 +40,18 @@ export async function uploadAttachment(form: FormData) {
       sha256,
     },
   );
-  if (reserveError || !path) actionFailed(`/ordens/${orderId}`);
+  if (reserveError || !path) return actionFailed(`/ordens/${orderId}`);
   const { error: uploadError } = await db.storage
     .from(attachmentBucket)
     .upload(path, file, { contentType: file.type, upsert: false });
   if (uploadError) {
     await db.rpc("os_abort_attachment_upload", { target: id });
-    actionFailed(`/ordens/${orderId}`);
+    return actionFailed(`/ordens/${orderId}`);
   }
   const { data: completion, error: completionError } = await db.rpc(
     "os_complete_attachment_upload",
     { target: id },
   );
-  if (completionError || completion !== "ready") actionFailed(`/ordens/${orderId}`);
+  if (completionError || completion !== "ready") return actionFailed(`/ordens/${orderId}`);
   revalidatePath(`/ordens/${orderId}`);
 }

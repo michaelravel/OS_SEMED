@@ -1,4 +1,4 @@
-export const publicRoutes = ["/login", "/configuracao"] as const;
+export const publicRoutes = ["/login", "/configuracao", "/api/health"] as const;
 
 export function isPrivateRoute(pathname: string) {
   const normalized = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;

@@ -8,19 +8,23 @@ import {
 } from "@/lib/domain";
 import { createOrder } from "@/app/actions";
 import { fieldLimits } from "@/lib/application-config";
+
+type UnitOption = Pick<Unit, "id" | "name">;
+type CatalogOption = Pick<Catalog, "id" | "kind" | "name" | "data">;
+
 export function OrderForm({
   units,
   categories,
   catalogs,
 }: {
-  units: Unit[];
-  categories: Catalog[];
-  catalogs: Catalog[];
+  units: UnitOption[];
+  categories: CatalogOption[];
+  catalogs: CatalogOption[];
 }) {
   const [area, setArea] = useState("");
   const [nature, setNature] = useState("");
   const [type, setType] = useState("");
-  const unique = (key: CatalogDataKey, rows: Catalog[]) =>
+  const unique = (key: CatalogDataKey, rows: CatalogOption[]) =>
     [...new Set(rows.map((c) => c.data[key]).filter(Boolean))].sort();
   const filtered = categories.filter(
     (c) =>

@@ -9,11 +9,13 @@ import { queryLimits } from "@/lib/application-config";
 import {
   terminalStatuses,
   roleNames,
-  type Catalog,
-  type Order,
 } from "@/lib/domain";
 import { session } from "@/lib/session";
 import { ensureQueriesSucceeded, ensureQuerySucceeded } from "@/lib/errors";
+import type {
+  OrderCatalog,
+  OrderDetail,
+} from "@/components/order-details/types";
 
 export default async function OrderPage({
   params,
@@ -29,14 +31,14 @@ export default async function OrderPage({
   const { data, error } = await db
     .from("os_orders")
     .select(
-      "id,protocol,legacy_id,title,status,priority,status_reason,resolution,unit_id,opened_by,responsible_id,category_id,driver_id,vehicle_id,route_id,requester_membership_id,responsible_membership_id,import_source,import_source_id,details,created_at,opened_at,completed_at,cancelled_at,reopened_at,active",
+      "id,protocol,title,status,priority,resolution,unit_id,opened_by,responsible_id,category_id,driver_id,vehicle_id,route_id,details,opened_at",
     )
     .eq("id", id)
     .maybeSingle();
   ensureQuerySucceeded({ error }, "Falha ao consultar ordem");
   if (!data) notFound();
 
-  const order = data as Order;
+  const order = data as OrderDetail;
   const [
     messages,
     attachments,
@@ -73,7 +75,7 @@ export default async function OrderPage({
       : Promise.resolve({ data: [], error: null }),
     db
       .from("os_catalogs")
-      .select("id,legacy_id,kind,name,data,active")
+      .select("id,kind,name")
       .eq("active", true)
       .order("name")
       .limit(queryLimits.lookupRows),
@@ -121,7 +123,7 @@ export default async function OrderPage({
             membership.unit_id === order.unit_id,
         )));
   const unit = units.data?.find((item) => item.id === order.unit_id);
-  const catalogRows = (catalogs.data ?? []) as Catalog[];
+  const catalogRows = (catalogs.data ?? []) as OrderCatalog[];
 
   return (
     <>
