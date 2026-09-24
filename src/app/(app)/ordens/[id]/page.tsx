@@ -1,7 +1,14 @@
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { session } from "@/lib/session";
-import { statuses, type Order } from "@/lib/domain";
+import {
+  priorities,
+  statusTransitions,
+  terminalStatuses,
+  type Catalog,
+  type Order,
+  type OrderStatus,
+} from "@/lib/domain";
 import { Heading, Badge, Notice, date } from "@/components/ui";
 import {
   changeStatus,
@@ -24,14 +31,15 @@ export default async function OrderPage({
   const { data, error } = await db
     .from("os_orders")
     .select(
-      "id,legacy_id,title,status,unit_id,opened_by,responsible_id,category_id,details,created_at,opened_at,active",
+      "id,protocol,legacy_id,title,status,priority,status_reason,unit_id,opened_by,responsible_id,category_id,details,created_at,opened_at,completed_at,cancelled_at,active",
     )
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error("Falha ao consultar ordem");
   if (!data) notFound();
   const o = data as Order;
-  const [messages, attachments, units, profiles] = await Promise.all([
+  const [messages, attachments, units, profiles, catalogs, events] =
+    await Promise.all([
     db
       .from("os_messages")
       .select("id,body,created_at,author_id")
@@ -48,26 +56,47 @@ export default async function OrderPage({
     admin
       ? db.from("os_profiles").select("id,name").order("name").limit(1000)
       : Promise.resolve({ data: [], error: null }),
+    db
+      .from("os_catalogs")
+      .select("id,legacy_id,kind,name,data,active")
+      .eq("active", true)
+      .order("name")
+      .limit(1000),
+    db
+      .from("os_order_events")
+      .select("id,from_status,to_status,reason,created_at")
+      .eq("order_id", id)
+      .order("created_at", { ascending: false })
+      .limit(100),
   ]);
-  if ([messages, attachments, units, profiles].some((r) => r.error))
+  if ([messages, attachments, units, profiles, catalogs, events].some((r) => r.error))
     throw new Error("Falha ao consultar detalhes");
   const assigned =
     memberships.some(
       (m) => m.role === "responsavel" && m.unit_id === o.unit_id,
     ) && o.responsible_id === user.id;
+  const closed = terminalStatuses.includes(
+    o.status as (typeof terminalStatuses)[number],
+  );
   const canPost =
-    admin ||
-    assigned ||
-    (o.opened_by === user.id &&
-      memberships.some(
-        (m) => m.role === "solicitante" && m.unit_id === o.unit_id,
-      ));
+    !closed &&
+    (admin ||
+      assigned ||
+      (o.opened_by === user.id &&
+        memberships.some(
+          (m) => m.role === "solicitante" && m.unit_id === o.unit_id,
+        )));
   const unit = units.data?.find((u) => u.id === o.unit_id);
+  const catalogRows = (catalogs.data ?? []) as Catalog[];
+  const catalogName = (value: string) =>
+    catalogRows.find((catalog) => catalog.id === value)?.name ?? value;
+  const nextStatuses =
+    statusTransitions[o.status as OrderStatus | "A conferir"] ?? [];
   return (
     <>
       <Heading
         title={o.title}
-        description={`Ordem ${o.legacy_id ?? o.id.slice(0, 8)} · ${unit?.name ?? "Unidade aguardando conciliação"}`}
+        description={`Protocolo OS-${String(o.protocol).padStart(6, "0")} · ${unit?.name ?? "Unidade aguardando conciliação"}`}
       />
       <Notice error={(await searchParams).erro} />
       <div className="detail-grid">
@@ -79,6 +108,13 @@ export default async function OrderPage({
           <dl className="details">
             <dt>Abertura</dt>
             <dd>{date(o.opened_at)}</dd>
+            <dt>Prioridade</dt>
+            <dd>{o.priority}</dd>
+            <dt>Classificação</dt>
+            <dd>{
+              catalogRows.find((catalog) => catalog.id === o.category_id)?.name ??
+              "Aguardando conciliação"
+            }</dd>
             {Object.entries(o.details).map(([k, v]) => (
               <div key={k}>
                 <dt>
@@ -94,23 +130,37 @@ export default async function OrderPage({
                     } as Record<string, string>
                   )[k] ?? k}
                 </dt>
-                <dd>{String(v) || "Não informado"}</dd>
+                <dd>
+                  {["driver", "vehicle", "route"].includes(k)
+                    ? catalogName(String(v)) || "Não informado"
+                    : String(v) || "Não informado"}
+                </dd>
               </div>
             ))}
           </dl>
-          {(admin || assigned) && (
+          {(admin || assigned) && nextStatuses.length > 0 && (
             <form action={changeStatus} className="filters">
               <input type="hidden" name="id" value={id} />
               <label>
                 Situação
-                <select name="status" defaultValue={o.status}>
-                  {statuses.map((s) => (
+                <select name="status" defaultValue="" required>
+                  <option value="">Selecione a próxima situação</option>
+                  {nextStatuses.map((s) => (
                     <option key={s}>{s}</option>
                   ))}
                 </select>
               </label>
+              <label>
+                Motivo / observação
+                <input name="reason" maxLength={2000} />
+              </label>
               <button>Atualizar status</button>
             </form>
+          )}
+          {closed && (
+            <p className="notice">
+              Ordem encerrada. Informe um motivo para reabri-la.
+            </p>
           )}
         </section>
         <section className="card">
@@ -162,6 +212,23 @@ export default async function OrderPage({
                 ))}
               </select>
             </label>
+            <label>
+              Classificação
+              <select
+                name="category_id"
+                defaultValue={o.category_id ?? ""}
+                required
+              >
+                <option value="">Selecione</option>
+                {catalogRows
+                  .filter((catalog) => catalog.kind === "logistics")
+                  .map((catalog) => (
+                    <option key={catalog.id} value={catalog.id}>
+                      {catalog.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
             {[
               ["responsible_id", "Responsável", o.responsible_id],
               ["opened_by", "Solicitante", o.opened_by],
@@ -211,6 +278,14 @@ export default async function OrderPage({
               </select>
             </label>
             <label>
+              Prioridade
+              <select name="priority" defaultValue={o.priority} required>
+                {priorities.map((priority) => (
+                  <option key={priority}>{priority}</option>
+                ))}
+              </select>
+            </label>
+            <label>
               B.O. / REDS
               <input
                 name="police_report"
@@ -232,6 +307,22 @@ export default async function OrderPage({
           </form>
         </section>
       )}
+      <section className="card">
+        <h2>Histórico de situações</h2>
+        <div className="timeline">
+          {events.data?.map((event) => (
+            <article key={event.id}>
+              <strong>
+                {event.from_status
+                  ? `${event.from_status} → ${event.to_status}`
+                  : event.to_status}
+              </strong>
+              <small>{date(event.created_at)}</small>
+              {event.reason && <p>{event.reason}</p>}
+            </article>
+          ))}
+        </div>
+      </section>
       <section className="card">
         <h2>Mensagens da ordem</h2>
         {canPost && (

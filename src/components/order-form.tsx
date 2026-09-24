@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import type { Catalog, Unit } from "@/lib/domain";
+import { priorities, type Catalog, type Unit } from "@/lib/domain";
 import { createOrder } from "@/app/actions";
 export function OrderForm({
   units,
@@ -42,6 +42,14 @@ export function OrderForm({
             <option key={u.id} value={u.id}>
               {u.name}
             </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Prioridade
+        <select name="priority" defaultValue="Normal" required>
+          {priorities.map((priority) => (
+            <option key={priority}>{priority}</option>
           ))}
         </select>
       </label>

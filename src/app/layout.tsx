@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
+// A política CSP usa um nonce novo por requisição; por isso toda a árvore deve
+// ser renderizada dinamicamente para que o Next.js aplique o nonce aos scripts.
+export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "OS SEMED | SIGMA",
   description:

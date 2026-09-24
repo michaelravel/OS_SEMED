@@ -31,7 +31,7 @@ export default async function Dashboard() {
       .eq("active", true),
     db
       .from("os_orders")
-      .select("id,title,status,created_at,legacy_id")
+      .select("id,protocol,title,status,created_at")
       .eq("active", true)
       .order("created_at", { ascending: false })
       .limit(8),
@@ -108,7 +108,7 @@ export default async function Dashboard() {
                 <tr key={o.id}>
                   <td>
                     <strong>{o.title}</strong>
-                    <small>{o.legacy_id ?? o.id.slice(0, 8)}</small>
+                    <small>OS-{String(o.protocol).padStart(6, "0")}</small>
                   </td>
                   <td>
                     <Badge status={o.status} />

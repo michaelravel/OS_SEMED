@@ -3,9 +3,12 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { mapSeed } from "../scripts/import-lib.mjs";
-const migration = await fs.readFile(
-  new URL("../supabase/migrations/202609230001_os_semed.sql", import.meta.url),
-  "utf8",
+const migrationsDirectory = new URL("../supabase/migrations/", import.meta.url);
+const migrations = await Promise.all(
+  (await fs.readdir(migrationsDirectory))
+    .filter((file) => file.endsWith(".sql"))
+    .sort()
+    .map((file) => fs.readFile(new URL(file, migrationsDirectory), "utf8")),
 );
 test("migration e RLS isolam unidades, identidades, operações e anexos", async () => {
   const db = new PGlite();
@@ -19,7 +22,7 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
       create table storage.objects(id uuid default gen_random_uuid(),bucket_id text,name text);
       alter table storage.objects enable row level security;
       grant usage on schema storage to authenticated; grant select,insert on storage.objects to authenticated;`);
-    await db.exec(migration);
+    await db.exec(migrations[0]);
     const ids = Array.from(
       { length: 12 },
       (_, i) => `00000000-0000-4000-a000-${String(i + 1).padStart(12, "0")}`,
@@ -50,6 +53,8 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
       ('${tech}','${unitA}','responsavel'),('${manager}',null,'gestor'),('${schoolManager}','${unitA}','gestor');
       insert into os_orders(id,unit_id,opened_by,responsible_id,category_id,title) values
       ('${orderA}','${unitA}','${owner}','${tech}','${cat}','Ordem A'),('${orderB}','${unitB}','${other}',null,'${cat}','Ordem B');`);
+    // Simula a atualização de um banco já populado e valida o backfill.
+    await db.exec(migrations.slice(1).join("\n"));
     async function asUser(id, sql) {
       await db.exec(
         `reset role; set role authenticated; select set_config('request.jwt.claim.sub','${id}',false);`,
@@ -87,27 +92,31 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
         `insert into os_memberships(user_id,role) values('${owner}','admin')`,
       ),
     );
-    assert.equal(
-      (
-        await asUser(
-          tech,
-          `update os_orders set title='Alterada' where id='${orderA}' returning id`,
-        )
-      ).rows.length,
-      0,
-    );
-    await asUser(tech, `select os_change_status('${orderA}','Em execução')`);
     await assert.rejects(
-      asUser(tech, `select os_change_status('${orderB}','Concluída')`),
+      asUser(
+        tech,
+        `update os_orders set title='Alterada' where id='${orderA}' returning id`,
+      ),
+    );
+    await asUser(tech, `select os_change_status('${orderA}','Em análise','')`);
+    await asUser(tech, `select os_change_status('${orderA}','Em execução','')`);
+    await assert.rejects(
+      asUser(tech, `select os_change_status('${orderB}','Concluída','Finalizada')`),
     );
     await assert.rejects(
-      asUser(manager, `select os_change_status('${orderA}','Concluída')`),
+      asUser(manager, `select os_change_status('${orderA}','Concluída','Finalizada')`),
     );
     await assert.rejects(
-      asUser(owner, `select os_change_status('${orderA}','Concluída')`),
+      asUser(owner, `select os_change_status('${orderA}','Concluída','Finalizada')`),
     );
     await assert.rejects(
-      asUser(admin, `select os_change_status('${orderA}','INVÁLIDO')`),
+      asUser(admin, `select os_change_status('${orderA}','INVÁLIDO','')`),
+    );
+    await assert.rejects(
+      asUser(admin, `select os_change_status('${orderA}','Aberta','')`),
+    );
+    await assert.rejects(
+      asUser(admin, `select os_change_status('${orderA}','Concluída','')`),
     );
     await asUser(
       owner,
@@ -163,12 +172,43 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
     );
     await asUser(
       admin,
+      `select os_change_status('${orderA}','Concluída','Atendimento validado')`,
+    );
+    await assert.rejects(
+      asUser(
+        owner,
+        `insert into os_messages(order_id,body) values('${orderA}','Após encerramento')`,
+      ),
+    );
+    assert.equal(
+      (
+        await asUser(
+          tech,
+          `select id from os_order_events where order_id='${orderA}'`,
+        )
+      ).rows.length,
+      4,
+    );
+    await assert.rejects(
+      asUser(
+        admin,
+        `update os_orders set title='Alteração direta' where id='${orderA}'`,
+      ),
+    );
+    await asUser(
+      admin,
       `update os_memberships set active=false where user_id='${owner}'`,
     );
     assert.deepEqual(await visible(owner), []);
+    await assert.rejects(
+      asUser(
+        admin,
+        `update os_memberships set active=false where user_id='${admin}'`,
+      ),
+    );
     await db.exec("reset role; set role anon;");
     await assert.rejects(db.query("select id from os_orders"));
-    await assert.rejects(db.query("select os_change_status(null,'Aberta')"));
+    await assert.rejects(db.query("select os_change_status(null,'Aberta','')"));
     await db.exec("reset role;");
     const unsecured = await db.query(
       "select tablename from pg_tables where schemaname='public' and tablename like 'os_%' and not rowsecurity",

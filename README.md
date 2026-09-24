@@ -27,7 +27,7 @@ npm run build
 Consulte [o guia completo](docs/migracao-next-supabase.md) antes de aplicar o SQL ou importar registros no destino.
 
 - `npm run data:prepare` converte as fontes locais e gera um relatório privado.
-- Migration: `supabase/migrations/202609230001_os_semed.sql`.
+- Migrations: aplicar, em ordem, os arquivos de `supabase/migrations/`.
 - Inspeção remota, somente leitura: `supabase/preflight.sql`.
 - A aplicação usa apenas URL e chave publishable; a chave administrativa é exclusiva do importador local.
 - Não publique payloads, fontes ou chaves como arquivos estáticos.

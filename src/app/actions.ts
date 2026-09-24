@@ -8,6 +8,7 @@ import {
   allowedMimes,
   catalogFields,
   orderSchema,
+  priorities,
   roles,
   statuses,
 } from "@/lib/domain";
@@ -17,6 +18,41 @@ function text(form: FormData, key: string) {
 }
 function failed(path: string): never {
   redirect(`${path}?erro=1`);
+}
+function safeFileName(name: string) {
+  return name
+    .replace(/[\\/\u0000-\u001f\u007f]/g, "_")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+async function matchesDeclaredType(file: File) {
+  const bytes = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  const starts = (...signature: number[]) =>
+    signature.every((value, index) => bytes[index] === value);
+  switch (file.type) {
+    case "application/pdf":
+      return starts(0x25, 0x50, 0x44, 0x46, 0x2d);
+    case "image/jpeg":
+      return starts(0xff, 0xd8, 0xff);
+    case "image/png":
+      return starts(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
+    case "image/webp":
+      return (
+        starts(0x52, 0x49, 0x46, 0x46) &&
+        bytes[8] === 0x57 &&
+        bytes[9] === 0x45 &&
+        bytes[10] === 0x42 &&
+        bytes[11] === 0x50
+      );
+    case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+    case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+      return starts(0x50, 0x4b, 0x03, 0x04);
+    case "text/plain":
+    case "text/csv":
+      return !bytes.includes(0);
+    default:
+      return false;
+  }
 }
 export async function login(form: FormData) {
   if (!configured()) redirect("/configuracao");
@@ -32,7 +68,8 @@ export async function login(form: FormData) {
 export async function logout() {
   if (configured()) {
     const db = await supabase();
-    await db.auth.signOut();
+    const { error } = await db.auth.signOut();
+    if (error) failed("/painel");
   }
   redirect("/login");
 }
@@ -40,7 +77,7 @@ export async function createOrder(form: FormData) {
   const { db, user } = await session();
   const input = orderSchema.safeParse(Object.fromEntries(form));
   if (!input.success) failed("/ordens/nova");
-  const { title, unit_id, category_id, ...details } = input.data;
+  const { title, unit_id, category_id, priority, ...details } = input.data;
   if (details.occurred_at && !Number.isFinite(Date.parse(details.occurred_at)))
     failed("/ordens/nova");
   const { data: category, error: categoryError } = await db
@@ -57,6 +94,7 @@ export async function createOrder(form: FormData) {
       title,
       unit_id,
       category_id,
+      priority,
       details,
       opened_by: user.id,
       status: "Aberta",
@@ -72,9 +110,11 @@ export async function changeStatus(form: FormData) {
   const { db } = await session();
   const id = z.uuid().parse(text(form, "id"));
   const status = z.enum(statuses).parse(text(form, "status"));
+  const reason = z.string().trim().max(2000).parse(text(form, "reason"));
   const { error } = await db.rpc("os_change_status", {
     target: id,
     next_status: status,
+    reason,
   });
   if (error) failed(`/ordens/${id}`);
   revalidatePath(`/ordens/${id}`);
@@ -90,6 +130,7 @@ export async function editOrderDetails(form: FormData) {
       observation: z.string().trim().max(5000),
       has_material: z.enum(["Não informado", "Sim", "Não"]),
       police_report: z.string().trim().max(200),
+      priority: z.enum(priorities),
     })
     .safeParse(Object.fromEntries(form));
   if (!input.success) failed(`/ordens/${id}`);
@@ -99,11 +140,13 @@ export async function editOrderDetails(form: FormData) {
     .eq("id", id)
     .single();
   if (readError || !previous) failed(`/ordens/${id}`);
-  const { title, ...details } = input.data;
-  const { error } = await db
-    .from("os_orders")
-    .update({ title, details: { ...previous.details, ...details } })
-    .eq("id", id);
+  const { title, priority, ...details } = input.data;
+  const { error } = await db.rpc("os_edit_order", {
+    target: id,
+    new_title: title,
+    new_priority: priority,
+    detail_patch: { ...previous.details, ...details },
+  });
   if (error) failed(`/ordens/${id}`);
   revalidatePath(`/ordens/${id}`);
 }
@@ -114,6 +157,7 @@ export async function assignOrder(form: FormData) {
   const unit = z.uuid().parse(text(form, "unit_id"));
   const responsible = text(form, "responsible_id");
   const author = text(form, "opened_by");
+  const category = z.uuid().parse(text(form, "category_id"));
   for (const [value, role] of [
     [responsible, "responsavel"],
     [author, "solicitante"],
@@ -130,15 +174,13 @@ export async function assignOrder(form: FormData) {
       .limit(1);
     if (error || !data?.length) failed(`/ordens/${id}`);
   }
-  const { error } = await db
-    .from("os_orders")
-    .update({
-      unit_id: unit,
-      responsible_id: responsible || null,
-      opened_by: author || null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id);
+  const { error } = await db.rpc("os_assign_order", {
+    target: id,
+    target_unit: unit,
+    target_responsible: responsible || null,
+    target_opened_by: author || null,
+    target_category: category,
+  });
   if (error) failed(`/ordens/${id}`);
   revalidatePath(`/ordens/${id}`);
 }
@@ -164,13 +206,16 @@ export async function uploadAttachment(form: FormData) {
     file.name.length > 250
   )
     failed(`/ordens/${orderId}`);
+  const name = safeFileName(file.name);
+  if (!name || name.length > 250 || !(await matchesDeclaredType(file)))
+    failed(`/ordens/${orderId}`);
   const id = crypto.randomUUID();
   const path = `${orderId}/${id}`;
   const { error: metaError } = await db.from("os_attachments").insert({
     id,
     order_id: orderId,
     uploaded_by: user.id,
-    name: file.name,
+    name,
     path,
     mime_type: file.type,
     size_bytes: file.size,

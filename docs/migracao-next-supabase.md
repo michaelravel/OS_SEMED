@@ -48,14 +48,14 @@ A atribuição automática por área do protótipo apontava para a conta técnic
 
 Um usuário pode possuir vários vínculos. Professor, aluno e responsável familiar não são papéis de OS introduzidos implicitamente; qualquer integração futura precisa de regras próprias. Alteração de perfil é restrita a administrador no banco e servidor. Nenhuma exclusão física de ordens/cadastros é concedida a authenticated. Catálogos de apoio são compartilhados entre usuários com vínculo; ordens seguem isolamento por vínculo/autoria/atribuição.
 
-Funções elevadas estão em `os_private`, com `search_path` vazio e objetos qualificados. São necessárias para consultar vínculos sem recursão de RLS, verificar acesso a relações e gravar auditoria. Não aceitam identidade de usuário como parâmetro; usam auth.uid(). Função pública `os_change_status` restringe campos, papel, unidade, atribuição e valores. EXECUTE público/anônimo foi revogado. RPC não substitui as demais políticas.
+Funções elevadas estão em `os_private`, com `search_path` vazio e objetos qualificados. São necessárias para consultar vínculos sem recursão de RLS, verificar acesso a relações e gravar auditoria. Não aceitam identidade de usuário como parâmetro; usam auth.uid(). As funções públicas `os_change_status`, `os_assign_order` e `os_edit_order` limitam cada operação aos campos e papéis necessários. A mudança de status também aplica a sequência permitida, exige motivo em encerramentos e reaberturas e grava `os_order_events`. EXECUTE público/anônimo foi revogado. RPC não substitui as demais políticas.
 
 Audit registra autor, data, ação, entidade, ID, anterior e posterior de ordens/cadastros/vínculos/mensagens. Contém dados de negócio e é restrita a administradores; definir retenção antes de produção. Logs Supabase Auth devem ser utilizados para autenticação; não foi criado um coletor externo de dados pessoais.
 
 ## Sequência segura de ativação
 
 1. Fazer backup do banco de destino e identificar o ambiente. Executar `supabase/preflight.sql` (somente leitura) e conferir o histórico remoto. Parar se já existirem objetos `os_*` incompatíveis ou o bucket `os-attachments`.
-2. Aplicar `supabase/migrations/202609230001_os_semed.sql` pelo fluxo de migrations do projeto, primeiro em homologação. Não executar reset. Confirmar tabelas, grants, RLS e bucket privado.
+2. Aplicar, em ordem, os arquivos de `supabase/migrations/` pelo fluxo de migrations do projeto, primeiro em homologação. Não executar reset. Confirmar tabelas, grants, RLS, funções e bucket privado após cada migration.
 3. Executar `npm run data:prepare`, conferir hashes/contagens/avisos. Configurar `.env.local` a partir de `.env.example`, sem versionar: URL, chave **publishable** e chave administrativa **somente local** para a importação. Nunca copiar chaves entre projetos.
 4. Importar somente após revisão: `npm run data:import -- --apply ouixjkqcuqpfmhmmsdxg.supabase.co`. A chave administrativa não é usada pelo Next.js; não cadastrá-la na Vercel.
 5. Criar uma conta real no Supabase Auth. O primeiro administrador precisa ser provisionado pelo operador do banco: inserir `os_profiles(id,name)` com o UUID dessa conta e `os_memberships(user_id,unit_id,role)` com unidade NULL e role `admin`. Nenhum UUID/e-mail foi presumido. Depois, usar a tela de usuários para os vínculos adicionais.

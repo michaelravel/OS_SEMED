@@ -8,6 +8,31 @@ export const statuses = [
   "Concluída",
   "Cancelada",
 ] as const;
+export type OrderStatus = (typeof statuses)[number];
+export const priorities = ["Baixa", "Normal", "Alta", "Urgente"] as const;
+export type OrderPriority = (typeof priorities)[number];
+export const terminalStatuses = ["Concluída", "Cancelada"] as const;
+export const statusTransitions: Record<OrderStatus | "A conferir", OrderStatus[]> = {
+  "A conferir": ["Aberta"],
+  Aberta: ["Em análise", "Cancelada"],
+  "Em análise": [
+    "Em execução",
+    "Aguardando material",
+    "Aguardando deslocamento/logística",
+    "Cancelada",
+  ],
+  "Em execução": [
+    "Em análise",
+    "Aguardando material",
+    "Aguardando deslocamento/logística",
+    "Concluída",
+    "Cancelada",
+  ],
+  "Aguardando material": ["Em execução", "Cancelada"],
+  "Aguardando deslocamento/logística": ["Em execução", "Cancelada"],
+  Concluída: ["Em análise"],
+  Cancelada: ["Aberta"],
+};
 export const roles = ["admin", "gestor", "solicitante", "responsavel"] as const;
 export type Role = (typeof roles)[number];
 export type Membership = {
@@ -35,9 +60,12 @@ export type Catalog = {
 };
 export type Order = {
   id: string;
+  protocol: number;
   legacy_id: string | null;
   title: string;
   status: string;
+  priority: OrderPriority;
+  status_reason: string;
   unit_id: string | null;
   opened_by: string | null;
   responsible_id: string | null;
@@ -45,12 +73,15 @@ export type Order = {
   details: Record<string, string>;
   created_at: string;
   opened_at: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
   active: boolean;
 };
 export const orderSchema = z.object({
   title: z.string().trim().min(3).max(500),
   unit_id: z.uuid(),
   category_id: z.uuid(),
+  priority: z.enum(priorities),
   observation: z.string().trim().max(5000),
   occurred_at: z.string().max(30),
   has_material: z.enum(["Não informado", "Sim", "Não"]),

@@ -13,11 +13,16 @@ export default async function Orders({
   const { db } = await session();
   let query = db
     .from("os_orders")
-    .select("id,title,status,legacy_id,created_at", { count: "exact" })
+    .select("id,protocol,title,status,priority,created_at", { count: "exact" })
     .eq("active", true)
     .order("created_at", { ascending: false })
     .range((page - 1) * 25, page * 25 - 1);
-  if (q) query = query.ilike("title", `%${q.replace(/[%_\\]/g, "")}%`);
+  if (q) {
+    const protocol = q.match(/^(?:OS-?)?0*(\d+)$/i)?.[1];
+    query = protocol
+      ? query.eq("protocol", Number(protocol))
+      : query.ilike("title", `%${q.replace(/[%_\\]/g, "")}%`);
+  }
   if (p.status && ["A conferir", ...statuses].includes(p.status))
     query = query.eq("status", p.status);
   const { data, error, count } = await query;
@@ -34,7 +39,7 @@ export default async function Orders({
           <input
             name="q"
             defaultValue={q}
-            placeholder="Título da solicitação"
+            placeholder="Título ou protocolo OS-000001"
             maxLength={100}
           />
         </label>
@@ -56,6 +61,7 @@ export default async function Orders({
               <th>Identificador</th>
               <th>Solicitação</th>
               <th>Situação</th>
+              <th>Prioridade</th>
               <th>Registro</th>
               <th>Ação</th>
             </tr>
@@ -63,11 +69,12 @@ export default async function Orders({
           <tbody>
             {data?.map((o) => (
               <tr key={o.id}>
-                <td>{o.legacy_id ?? o.id.slice(0, 8)}</td>
+                <td>OS-{String(o.protocol).padStart(6, "0")}</td>
                 <td>{o.title}</td>
                 <td>
                   <Badge status={o.status} />
                 </td>
+                <td>{o.priority}</td>
                 <td>{date(o.created_at)}</td>
                 <td>
                   <Link href={`/ordens/${o.id}`}>Ver detalhes →</Link>

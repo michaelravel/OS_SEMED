@@ -24,6 +24,15 @@ type Attachment = {
   size_bytes: number;
   created_at: string;
 };
+type OrderEvent = {
+  id: number;
+  order_id: string;
+  actor: string | null;
+  from_status: string | null;
+  to_status: string;
+  reason: string;
+  created_at: string;
+};
 type Audit = {
   id: number;
   actor: string | null;
@@ -54,6 +63,7 @@ export type Database = {
         Attachment,
         "id" | "order_id" | "name" | "path" | "mime_type" | "size_bytes"
       >;
+      os_order_events: Table<OrderEvent>;
       os_audit: Table<Audit>;
       os_import_records: Table<
         { source: string; source_id: string; payload: Json },
@@ -63,7 +73,26 @@ export type Database = {
     Views: Record<string, never>;
     Functions: {
       os_change_status: {
-        Args: { target: string; next_status: string };
+        Args: { target: string; next_status: string; reason: string };
+        Returns: undefined;
+      };
+      os_assign_order: {
+        Args: {
+          target: string;
+          target_unit: string;
+          target_responsible: string | null;
+          target_opened_by: string | null;
+          target_category: string;
+        };
+        Returns: undefined;
+      };
+      os_edit_order: {
+        Args: {
+          target: string;
+          new_title: string;
+          new_priority: string;
+          detail_patch: Json;
+        };
         Returns: undefined;
       };
     };
