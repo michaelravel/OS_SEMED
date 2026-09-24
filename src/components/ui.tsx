@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { queryLimits } from "@/lib/application-config";
+import { orderStatusNames } from "@/lib/domain";
 export function Heading({
   title,
   description,
@@ -25,7 +27,7 @@ export function Notice({ error }: { error?: string }) {
 export function Badge({ status }: { status: string }) {
   return (
     <span
-      className={`badge ${status === "Concluída" ? "success" : status === "Cancelada" ? "danger" : status === "A conferir" ? "warning" : ""}`}
+      className={`badge ${status === orderStatusNames.completed ? "success" : status === orderStatusNames.canceled ? "danger" : status === orderStatusNames.pendingReview ? "warning" : ""}`}
     >
       {status}
     </span>
@@ -53,7 +55,7 @@ export function Pagination({
             ← Anterior
           </Link>
         )}
-        {page * 25 < total && (
+        {page * queryLimits.pageSize < total && (
           <Link
             href={`${base}${base.includes("?") ? "&" : "?"}page=${page + 1}`}
           >
@@ -63,10 +65,6 @@ export function Pagination({
       </div>
     </div>
   );
-}
-export function pageNumber(value?: string) {
-  const n = Number(value);
-  return Number.isSafeInteger(n) && n > 0 ? Math.min(n, 100000) : 1;
 }
 export function date(value: string | null) {
   return value

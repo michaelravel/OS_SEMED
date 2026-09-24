@@ -6,15 +6,15 @@ type Table<Row, Required extends keyof Row = never> = {
   Update: Partial<Row>;
   Relationships: [];
 };
-type Profile = { id: string; name: string };
-type Message = {
+export type Profile = { id: string; name: string };
+export type Message = {
   id: string;
   order_id: string;
   author_id: string;
   body: string;
   created_at: string;
 };
-type Attachment = {
+export type Attachment = {
   id: string;
   order_id: string;
   uploaded_by: string;
@@ -30,7 +30,7 @@ type Attachment = {
   quarantined_at: string | null;
   created_at: string;
 };
-type OrderEvent = {
+export type OrderEvent = {
   id: number;
   order_id: string;
   actor: string | null;

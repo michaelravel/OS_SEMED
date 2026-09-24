@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { session } from "@/lib/session";
-import { statuses } from "@/lib/domain";
-import { Heading, Badge, Pagination, pageNumber, date } from "@/components/ui";
+import { isOrderStatus, orderStatuses } from "@/lib/domain";
+import { Heading, Badge, Pagination, date } from "@/components/ui";
+import { pageNumber, pageRange } from "@/lib/pagination";
+import { ensureQuerySucceeded } from "@/lib/errors";
+import { fieldLimits } from "@/lib/application-config";
 export default async function Orders({
   searchParams,
 }: {
@@ -9,6 +12,7 @@ export default async function Orders({
 }) {
   const p = await searchParams;
   const page = pageNumber(p.page);
+  const range = pageRange(page);
   const q = (p.q ?? "").slice(0, 100);
   const { db } = await session();
   let query = db
@@ -16,17 +20,17 @@ export default async function Orders({
     .select("id,protocol,title,status,priority,created_at", { count: "exact" })
     .eq("active", true)
     .order("created_at", { ascending: false })
-    .range((page - 1) * 25, page * 25 - 1);
+    .range(range.from, range.to);
   if (q) {
     const protocol = q.match(/^(?:OS-?)?0*(\d+)$/i)?.[1];
     query = protocol
       ? query.eq("protocol", Number(protocol))
       : query.ilike("title", `%${q.replace(/[%_\\]/g, "")}%`);
   }
-  if (p.status && ["A conferir", ...statuses].includes(p.status))
+  if (p.status && isOrderStatus(p.status))
     query = query.eq("status", p.status);
   const { data, error, count } = await query;
-  if (error) throw new Error("Falha ao consultar ordens");
+  ensureQuerySucceeded({ error }, "Falha ao consultar ordens");
   return (
     <>
       <Heading
@@ -40,14 +44,14 @@ export default async function Orders({
             name="q"
             defaultValue={q}
             placeholder="Título ou protocolo OS-000001"
-            maxLength={100}
+            maxLength={fieldLimits.search}
           />
         </label>
         <label>
           Situação
           <select name="status" defaultValue={p.status ?? ""}>
             <option value="">Todas</option>
-            {["A conferir", ...statuses].map((s) => (
+            {orderStatuses.map((s) => (
               <option key={s}>{s}</option>
             ))}
           </select>

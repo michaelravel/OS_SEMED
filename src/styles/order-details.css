@@ -1,0 +1,40 @@
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 22px;
+}
+.details {
+  display: grid;
+  gap: 12px;
+  overflow-wrap: anywhere;
+}
+.details dt {
+  font-size: 11px;
+  color: hsl(var(--muted));
+  margin-bottom: 5px;
+}
+.details dd {
+  margin: 0;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+.timeline article {
+  border-left: 2px solid hsl(var(--border));
+  padding: 0 0 5px 18px;
+  margin: 24px 0;
+}
+.timeline small {
+  display: block;
+  color: hsl(var(--muted));
+  margin-top: 5px;
+}
+.timeline p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1100px) {
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,8 +1,11 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { session } from "@/lib/session";
-import { roles } from "@/lib/domain";
-import { Heading, Notice, Pagination, pageNumber } from "@/components/ui";
+import { roleNames, roles } from "@/lib/domain";
+import { Heading, Notice, Pagination } from "@/components/ui";
+import { pageNumber, pageRange } from "@/lib/pagination";
+import { fieldLimits, queryLimits } from "@/lib/application-config";
+import { ensureQueriesSucceeded } from "@/lib/errors";
 import { saveMembership } from "@/app/actions";
 export default async function Users({
   searchParams,
@@ -13,17 +16,20 @@ export default async function Users({
   if (!admin) redirect("/painel");
   const p = await searchParams;
   const page = pageNumber(p.page);
+  const range = pageRange(page);
   const [profiles, units, memberships] = await Promise.all([
-    db.from("os_profiles").select("id,name").order("name").limit(1000),
-    db.from("os_units").select("id,name").order("name").limit(1000),
+    db.from("os_profiles").select("id,name").order("name").limit(queryLimits.lookupRows),
+    db.from("os_units").select("id,name").order("name").limit(queryLimits.lookupRows),
     db
       .from("os_memberships")
       .select("id,user_id,unit_id,role,active", { count: "exact" })
       .order("id")
-      .range((page - 1) * 25, page * 25 - 1),
+      .range(range.from, range.to),
   ]);
-  if ([profiles, units, memberships].some((r) => r.error))
-    throw new Error("Falha ao consultar vínculos");
+  ensureQueriesSucceeded(
+    [profiles, units, memberships],
+    "Falha ao consultar vínculos",
+  );
   const item = memberships.data?.find((m) => m.id === p.edit);
   return (
     <>
@@ -98,7 +104,7 @@ export default async function Users({
             <input
               name="name"
               required
-              maxLength={200}
+              maxLength={fieldLimits.profileName}
               defaultValue={
                 profiles.data?.find((p) => p.id === item?.user_id)?.name ?? ""
               }
@@ -106,7 +112,10 @@ export default async function Users({
           </label>
           <label>
             Papel
-            <select name="role" defaultValue={item?.role ?? "solicitante"}>
+            <select
+              name="role"
+              defaultValue={item?.role ?? roleNames.requester}
+            >
               {roles.map((r) => (
                 <option key={r}>{r}</option>
               ))}

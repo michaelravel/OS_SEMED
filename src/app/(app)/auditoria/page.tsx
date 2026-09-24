@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { session } from "@/lib/session";
-import { Heading, Pagination, pageNumber, date } from "@/components/ui";
+import { Heading, Pagination, date } from "@/components/ui";
+import { pageNumber, pageRange } from "@/lib/pagination";
+import { ensureQuerySucceeded } from "@/lib/errors";
 export default async function Audit({
   searchParams,
 }: {
@@ -9,12 +11,13 @@ export default async function Audit({
   const { db, admin } = await session();
   if (!admin) redirect("/painel");
   const page = pageNumber((await searchParams).page);
+  const range = pageRange(page);
   const { data, error, count } = await db
     .from("os_audit")
     .select("id,actor,entity,record_id,action,created_at", { count: "exact" })
     .order("id", { ascending: false })
-    .range((page - 1) * 25, page * 25 - 1);
-  if (error) throw new Error("Falha ao consultar auditoria");
+    .range(range.from, range.to);
+  ensureQuerySucceeded({ error }, "Falha ao consultar auditoria");
   return (
     <>
       <Heading

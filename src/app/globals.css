@@ -1,16 +1,7 @@
+@import "../styles/tokens.css";
+@import "../styles/order-details.css";
+
 /* Identidade do SIGMA: tokens e tipografia do projeto de referência. */
-:root {
-  --background: 216 38% 97%;
-  --foreground: 220 43% 16%;
-  --primary: 222 89% 30%;
-  --secondary: 91 100% 44%;
-  --muted: 216 15% 47%;
-  --border: 218 43% 90%;
-  --accent: 216 100% 95%;
-  --radius: 0.625rem;
-  --navy: #06215f;
-  --lime: #6ee000;
-}
 * {
   box-sizing: border-box;
 }
@@ -533,40 +524,6 @@ td small {
 .span-2 {
   grid-column: span 2;
 }
-.detail-grid {
-  display: grid;
-  grid-template-columns: 1.5fr 1fr;
-  gap: 22px;
-}
-.details {
-  display: grid;
-  gap: 12px;
-  overflow-wrap: anywhere;
-}
-.details dt {
-  font-size: 11px;
-  color: hsl(var(--muted));
-  margin-bottom: 5px;
-}
-.details dd {
-  margin: 0;
-  font-size: 13px;
-  white-space: pre-wrap;
-}
-.timeline article {
-  border-left: 2px solid hsl(var(--border));
-  padding: 0 0 5px 18px;
-  margin: 24px 0;
-}
-.timeline small {
-  display: block;
-  color: hsl(var(--muted));
-  margin-top: 5px;
-}
-.timeline p {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
 .notice {
   padding: 16px;
   border: 1px solid #c8d9f3;
@@ -686,9 +643,6 @@ td small {
   }
   .welcome-mark {
     padding: 15px;
-  }
-  .detail-grid {
-    grid-template-columns: 1fr;
   }
   .welcome {
     padding: 26px;

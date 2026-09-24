@@ -8,6 +8,9 @@ import {
   Building2,
   ArrowUpRight,
 } from "lucide-react";
+import { queryLimits } from "@/lib/application-config";
+import { ensureQueriesSucceeded } from "@/lib/errors";
+import { orderStatusNames } from "@/lib/domain";
 export default async function Dashboard() {
   const { db } = await session();
   const [all, pending, done, units, recent] = await Promise.all([
@@ -19,11 +22,15 @@ export default async function Dashboard() {
       .from("os_orders")
       .select("id", { count: "exact", head: true })
       .eq("active", true)
-      .not("status", "in", '("Concluída","Cancelada")'),
+      .not(
+        "status",
+        "in",
+        `("${orderStatusNames.completed}","${orderStatusNames.canceled}")`,
+      ),
     db
       .from("os_orders")
       .select("id", { count: "exact", head: true })
-      .eq("status", "Concluída")
+      .eq("status", orderStatusNames.completed)
       .eq("active", true),
     db
       .from("os_units")
@@ -34,10 +41,12 @@ export default async function Dashboard() {
       .select("id,protocol,title,status,created_at")
       .eq("active", true)
       .order("created_at", { ascending: false })
-      .limit(8),
+      .limit(queryLimits.dashboardRows),
   ]);
-  if ([all, pending, done, units, recent].some((r) => r.error))
-    throw new Error("Falha ao consultar painel");
+  ensureQueriesSucceeded(
+    [all, pending, done, units, recent],
+    "Falha ao consultar painel",
+  );
   const cards = [
     ["Ordens de serviço", all.count, ClipboardList],
     ["Em acompanhamento", pending.count, Clock3],

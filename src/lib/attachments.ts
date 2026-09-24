@@ -1,4 +1,5 @@
 export const attachmentBucket = "os-attachments";
+export const attachmentFileNameLimit = 180;
 
 export const attachmentMimeExtensions = {
   "application/pdf": [".pdf"],
@@ -15,7 +16,13 @@ export const attachmentMimeExtensions = {
   ],
 } as const;
 
-export const attachmentMimeTypes = Object.keys(attachmentMimeExtensions);
+export type AttachmentMimeType = keyof typeof attachmentMimeExtensions;
+export const attachmentMimeTypes = Object.keys(
+  attachmentMimeExtensions,
+) as AttachmentMimeType[];
+export function isAttachmentMimeType(value: string): value is AttachmentMimeType {
+  return attachmentMimeTypes.includes(value as AttachmentMimeType);
+}
 export const attachmentAccept = Object.values(attachmentMimeExtensions)
   .flat()
   .join(",");
@@ -24,6 +31,7 @@ const unsafeNameCharacters =
   /[\\/\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g;
 
 export function normalizeAttachmentName(original: string) {
+  const maxLength = attachmentFileNameLimit;
   const normalized = original
     .normalize("NFKC")
     .replace(unsafeNameCharacters, "_")
@@ -39,17 +47,17 @@ export function normalizeAttachmentName(original: string) {
       ? normalized.slice(extensionStart)
       : "";
   const base = extension
-    ? `${normalized.slice(0, extensionStart).slice(0, 180 - extension.length)}${extension}`
-    : normalized.slice(0, 180);
+    ? `${normalized.slice(0, extensionStart).slice(0, maxLength - extension.length)}${extension}`
+    : normalized.slice(0, maxLength);
   return /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(base)
-    ? `_${base}`.slice(0, 180)
+    ? `_${base}`.slice(0, maxLength)
     : base;
 }
 
 export function attachmentExtensionMatches(name: string, mime: string) {
-  const extensions = attachmentMimeExtensions[
-    mime as keyof typeof attachmentMimeExtensions
-  ] as readonly string[] | undefined;
+  const extensions = attachmentMimeExtensions[mime as AttachmentMimeType] as
+    | readonly string[]
+    | undefined;
   return Boolean(
     extensions?.some((extension) => name.toLowerCase().endsWith(extension)),
   );

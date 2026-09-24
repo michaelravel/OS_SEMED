@@ -3,6 +3,8 @@ import { session } from "@/lib/session";
 import { canOpen, type Unit, type Catalog } from "@/lib/domain";
 import { Heading, Notice } from "@/components/ui";
 import { OrderForm } from "@/components/order-form";
+import { queryLimits } from "@/lib/application-config";
+import { ensureQueriesSucceeded } from "@/lib/errors";
 export default async function NewOrder({
   searchParams,
 }: {
@@ -17,15 +19,18 @@ export default async function NewOrder({
         .select("id,name,type,address,coordinates,active")
         .eq("active", true)
         .order("name")
-        .limit(1000),
+        .limit(queryLimits.lookupRows),
       db
         .from("os_catalogs")
         .select("id,legacy_id,kind,name,data,active")
         .eq("active", true)
         .order("name")
-        .limit(1000),
+        .limit(queryLimits.lookupRows),
     ]);
-  if (uError || cError) throw new Error("Falha ao consultar cadastros");
+  ensureQueriesSucceeded(
+    [{ error: uError }, { error: cError }],
+    "Falha ao consultar cadastros",
+  );
   return (
     <>
       <Heading

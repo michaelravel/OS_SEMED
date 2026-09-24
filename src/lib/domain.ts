@@ -1,30 +1,42 @@
 import { z } from "zod";
+import { fieldLimits, workflowLimits } from "./application-config";
+
+export { workflowLimits };
+export const orderStatusNames = {
+  pendingReview: "A conferir",
+  open: "Aberta",
+  analyzing: "Em análise",
+  executing: "Em execução",
+  waitingMaterial: "Aguardando material",
+  waitingLogistics: "Aguardando deslocamento/logística",
+  completed: "Concluída",
+  canceled: "Cancelada",
+} as const;
+export const pendingStatus = orderStatusNames.pendingReview;
 export const statuses = [
-  "Aberta",
-  "Em análise",
-  "Em execução",
-  "Aguardando material",
-  "Aguardando deslocamento/logística",
-  "Concluída",
-  "Cancelada",
+  orderStatusNames.open,
+  orderStatusNames.analyzing,
+  orderStatusNames.executing,
+  orderStatusNames.waitingMaterial,
+  orderStatusNames.waitingLogistics,
+  orderStatusNames.completed,
+  orderStatusNames.canceled,
 ] as const;
-export type OrderStatus = (typeof statuses)[number];
+export const orderStatuses = [pendingStatus, ...statuses] as const;
+export type OrderStatus = (typeof orderStatuses)[number];
 export const progressStatuses = [
-  "Aberta",
-  "Em análise",
-  "Em execução",
-  "Aguardando material",
-  "Aguardando deslocamento/logística",
+  orderStatusNames.open,
+  orderStatusNames.analyzing,
+  orderStatusNames.executing,
+  orderStatusNames.waitingMaterial,
+  orderStatusNames.waitingLogistics,
 ] as const;
 export const priorities = ["Baixa", "Normal", "Alta", "Urgente"] as const;
 export type OrderPriority = (typeof priorities)[number];
-export const terminalStatuses = ["Concluída", "Cancelada"] as const;
-export const workflowLimits = {
-  justificationMin: 3,
-  justificationMax: 2000,
-  solutionMin: 3,
-  solutionMax: 5000,
-} as const;
+export const terminalStatuses = [
+  orderStatusNames.completed,
+  orderStatusNames.canceled,
+] as const;
 const workflowId = z.uuid();
 export const advanceOrderSchema = z.object({
   id: workflowId,
@@ -47,7 +59,18 @@ export const justifyOrderSchema = z.object({
     .min(workflowLimits.justificationMin)
     .max(workflowLimits.justificationMax),
 });
-export const roles = ["admin", "gestor", "solicitante", "responsavel"] as const;
+export const roleNames = {
+  administrator: "admin",
+  manager: "gestor",
+  requester: "solicitante",
+  responsible: "responsavel",
+} as const;
+export const roles = [
+  roleNames.administrator,
+  roleNames.manager,
+  roleNames.requester,
+  roleNames.responsible,
+] as const;
 export type Role = (typeof roles)[number];
 export type Membership = {
   id: string;
@@ -64,20 +87,56 @@ export type Unit = {
   coordinates: string;
   active: boolean;
 };
+export const catalogKinds = [
+  "logistics",
+  "routes",
+  "vehicles",
+  "drivers",
+] as const;
+export type CatalogKind = (typeof catalogKinds)[number];
+export function isCatalogKind(value: string): value is CatalogKind {
+  return catalogKinds.includes(value as CatalogKind);
+}
+export type CatalogDataKey =
+  | "area"
+  | "nature"
+  | "type"
+  | "description"
+  | "detail"
+  | "options"
+  | "reminder"
+  | "routeId"
+  | "number"
+  | "link"
+  | "plate"
+  | "model"
+  | "seats"
+  | "driverId";
+export type CatalogData = Partial<Record<CatalogDataKey, string>>;
 export type Catalog = {
   id: string;
   legacy_id: string;
-  kind: string;
+  kind: CatalogKind;
   name: string;
-  data: Record<string, string>;
+  data: CatalogData;
   active: boolean;
 };
+export type OrderDetails = {
+  observation?: string;
+  occurred_at?: string;
+  has_material?: "Não informado" | "Sim" | "Não";
+  police_report?: string;
+  [legacyField: string]: string | undefined;
+};
+export function isOrderStatus(value: string): value is OrderStatus {
+  return orderStatuses.includes(value as OrderStatus);
+}
 export type Order = {
   id: string;
   protocol: number;
   legacy_id: string | null;
   title: string;
-  status: string;
+  status: OrderStatus;
   priority: OrderPriority;
   status_reason: string;
   resolution: string | null;
@@ -96,7 +155,7 @@ export type Order = {
   responsible_membership_id: string | null;
   import_source: string | null;
   import_source_id: string | null;
-  details: Record<string, string>;
+  details: OrderDetails;
   created_at: string;
   opened_at: string | null;
   completed_at: string | null;
@@ -105,14 +164,14 @@ export type Order = {
   active: boolean;
 };
 export const orderSchema = z.object({
-  title: z.string().trim().min(3).max(500),
+  title: z.string().trim().min(3).max(fieldLimits.title),
   unit_id: z.uuid(),
   category_id: z.uuid(),
   priority: z.enum(priorities),
-  observation: z.string().trim().max(5000),
+  observation: z.string().trim().max(fieldLimits.observation),
   occurred_at: z.string().max(30),
   has_material: z.enum(["Não informado", "Sim", "Não"]),
-  police_report: z.string().trim().max(200),
+  police_report: z.string().trim().max(fieldLimits.policeReport),
   driver: z.union([z.literal(""), z.uuid()]),
   vehicle: z.union([z.literal(""), z.uuid()]),
   route: z.union([z.literal(""), z.uuid()]),
@@ -127,10 +186,7 @@ export function canOpen(memberships: Membership[]) {
     (m) => m.active && ["admin", "solicitante"].includes(m.role),
   );
 }
-export const catalogFields: Record<
-  string,
-  { label: string; fields: [string, string][] }
-> = {
+export const catalogFields = {
   logistics: {
     label: "Classificações logísticas",
     fields: [
@@ -160,4 +216,7 @@ export const catalogFields: Record<
     ],
   },
   drivers: { label: "Motoristas", fields: [["driverId", "Identificador"]] },
-};
+} satisfies Record<
+  CatalogKind,
+  { label: string; fields: [CatalogDataKey, string][] }
+>;

@@ -2,8 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { session } from "@/lib/session";
-import { catalogFields, type Catalog } from "@/lib/domain";
-import { Heading, Notice, Pagination, pageNumber } from "@/components/ui";
+import { catalogFields, isCatalogKind, type Catalog } from "@/lib/domain";
+import { Heading, Notice, Pagination } from "@/components/ui";
+import { pageNumber, pageRange } from "@/lib/pagination";
+import { ensureQuerySucceeded } from "@/lib/errors";
+import { fieldLimits } from "@/lib/application-config";
 import { saveCatalog } from "@/app/actions";
 export default async function CatalogPage({
   params,
@@ -18,10 +21,11 @@ export default async function CatalogPage({
   }>;
 }) {
   const { kind } = await params;
-  if (!Object.hasOwn(catalogFields, kind)) notFound();
+  if (!isCatalogKind(kind)) notFound();
   const config = catalogFields[kind];
   const p = await searchParams;
   const page = pageNumber(p.page);
+  const range = pageRange(page);
   const { db, admin } = await session();
   const q = (p.q ?? "").slice(0, 100);
   let query = db
@@ -29,10 +33,10 @@ export default async function CatalogPage({
     .select("id,legacy_id,kind,name,data,active", { count: "exact" })
     .eq("kind", kind)
     .order("name")
-    .range((page - 1) * 25, page * 25 - 1);
+    .range(range.from, range.to);
   if (q) query = query.ilike("name", `%${q.replace(/[%_\\]/g, "")}%`);
   const { data, error, count } = await query;
-  if (error) throw new Error("Falha ao consultar cadastros");
+  ensureQuerySucceeded({ error }, "Falha ao consultar cadastros");
   const edit =
     admin && p.edit && z.uuid().safeParse(p.edit).success
       ? await db
@@ -42,7 +46,7 @@ export default async function CatalogPage({
           .eq("kind", kind)
           .single()
       : null;
-  if (edit?.error) throw new Error("Cadastro indisponível");
+  if (edit) ensureQuerySucceeded(edit, "Cadastro indisponível");
   const item = edit?.data as Catalog | undefined;
   return (
     <>
@@ -109,7 +113,7 @@ export default async function CatalogPage({
                 name="name"
                 defaultValue={item?.name ?? ""}
                 required
-                maxLength={500}
+                maxLength={fieldLimits.catalogName}
               />
             </label>
             {config.fields.map(([key, label]) => (
@@ -118,7 +122,7 @@ export default async function CatalogPage({
                 <input
                   name={key}
                   defaultValue={item?.data[key] ?? ""}
-                  maxLength={2000}
+                  maxLength={fieldLimits.catalogValue}
                   type={key === "link" ? "url" : "text"}
                 />
               </label>

@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { session } from "@/lib/session";
-import { Heading, Notice, Pagination, pageNumber } from "@/components/ui";
+import { Heading, Notice, Pagination } from "@/components/ui";
+import { pageNumber, pageRange } from "@/lib/pagination";
+import { ensureQuerySucceeded } from "@/lib/errors";
+import { fieldLimits } from "@/lib/application-config";
 import { saveUnit } from "@/app/actions";
 import { z } from "zod";
 export default async function Units({
@@ -15,16 +18,17 @@ export default async function Units({
 }) {
   const p = await searchParams;
   const page = pageNumber(p.page);
+  const range = pageRange(page);
   const { db, admin } = await session();
   const q = (p.q ?? "").slice(0, 100);
   let query = db
     .from("os_units")
     .select("id,name,type,address,coordinates,active", { count: "exact" })
     .order("name")
-    .range((page - 1) * 25, page * 25 - 1);
+    .range(range.from, range.to);
   if (q) query = query.ilike("name", `%${q.replace(/[%_\\]/g, "")}%`);
   const { data, error, count } = await query;
-  if (error) throw new Error("Falha ao consultar unidades");
+  ensureQuerySucceeded({ error }, "Falha ao consultar unidades");
   const edit =
     admin && p.edit && z.uuid().safeParse(p.edit).success
       ? await db
@@ -33,7 +37,7 @@ export default async function Units({
           .eq("id", p.edit)
           .single()
       : null;
-  if (edit?.error) throw new Error("Unidade indisponível");
+  if (edit) ensureQuerySucceeded(edit, "Unidade indisponível");
   const item = edit?.data;
   return (
     <>
@@ -89,10 +93,10 @@ export default async function Units({
             <input type="hidden" name="id" value={item?.id ?? ""} />
             {(
               [
-                ["name", "Nome", 300],
-                ["type", "Tipo", 200],
-                ["address", "Endereço", 1000],
-                ["coordinates", "Coordenadas", 100],
+                ["name", "Nome", fieldLimits.unitName],
+                ["type", "Tipo", fieldLimits.unitType],
+                ["address", "Endereço", fieldLimits.unitAddress],
+                ["coordinates", "Coordenadas", fieldLimits.coordinates],
               ] as const
             ).map(([key, label, max]) => (
               <label key={key}>

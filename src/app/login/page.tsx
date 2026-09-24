@@ -1,5 +1,6 @@
 import { login } from "@/app/actions";
 import { configured } from "@/lib/supabase";
+import { fieldLimits } from "@/lib/application-config";
 import Link from "next/link";
 export default async function Login({
   searchParams,
@@ -54,7 +55,7 @@ export default async function Login({
                   type="email"
                   autoComplete="username"
                   required
-                  maxLength={254}
+                  maxLength={fieldLimits.email}
                 />
               </label>
               <label>
@@ -64,7 +65,7 @@ export default async function Login({
                   type="password"
                   autoComplete="current-password"
                   required
-                  maxLength={200}
+                  maxLength={fieldLimits.password}
                 />
               </label>
               <button>Entrar no sistema →</button>

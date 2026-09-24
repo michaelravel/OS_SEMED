@@ -1,0 +1,12 @@
+:root {
+  --background: 216 38% 97%;
+  --foreground: 220 43% 16%;
+  --primary: 222 89% 30%;
+  --secondary: 91 100% 44%;
+  --muted: 216 15% 47%;
+  --border: 218 43% 90%;
+  --accent: 216 100% 95%;
+  --radius: 0.625rem;
+  --navy: #06215f;
+  --lime: #6ee000;
+}

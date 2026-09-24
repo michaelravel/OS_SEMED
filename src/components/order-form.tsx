@@ -1,7 +1,13 @@
 "use client";
 import { useState } from "react";
-import { priorities, type Catalog, type Unit } from "@/lib/domain";
+import {
+  priorities,
+  type Catalog,
+  type CatalogDataKey,
+  type Unit,
+} from "@/lib/domain";
 import { createOrder } from "@/app/actions";
+import { fieldLimits } from "@/lib/application-config";
 export function OrderForm({
   units,
   categories,
@@ -14,7 +20,7 @@ export function OrderForm({
   const [area, setArea] = useState("");
   const [nature, setNature] = useState("");
   const [type, setType] = useState("");
-  const unique = (key: string, rows: Catalog[]) =>
+  const unique = (key: CatalogDataKey, rows: Catalog[]) =>
     [...new Set(rows.map((c) => c.data[key]).filter(Boolean))].sort();
   const filtered = categories.filter(
     (c) =>
@@ -29,7 +35,7 @@ export function OrderForm({
         <input
           name="title"
           minLength={3}
-          maxLength={500}
+          maxLength={fieldLimits.title}
           required
           placeholder="Descreva brevemente o serviço necessário"
         />
@@ -160,11 +166,15 @@ export function OrderForm({
       ))}
       <label>
         B.O. / REDS
-        <input name="police_report" maxLength={200} />
+        <input name="police_report" maxLength={fieldLimits.policeReport} />
       </label>
       <label className="span-2">
         Observações
-        <textarea name="observation" maxLength={5000} rows={5} />
+        <textarea
+          name="observation"
+          maxLength={fieldLimits.observation}
+          rows={5}
+        />
       </label>
       <div className="span-2">
         <p className="muted">
