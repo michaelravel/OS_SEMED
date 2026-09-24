@@ -1,5 +1,4 @@
 import {
-  addServiceEntry,
   assignOrder,
   cancelOrder,
   completeOrder,
@@ -54,13 +53,18 @@ export function OrderWorkflowActions({
   if (!available.size) return null;
 
   return (
-    <section className="card">
-      <h2>Operações disponíveis</h2>
-      <p className="muted">
-        As opções abaixo são calculadas pelo banco conforme seu vínculo, a
-        atribuição e o estado atual da ordem.
-      </p>
-      <div className="form-grid">
+    <section className="card workflow-actions-card">
+      <div className="section-head">
+        <div>
+          <p className="eyebrow">AÇÕES</p>
+          <h2>Operações disponíveis</h2>
+          <p className="muted">
+            As opções abaixo respeitam seu vínculo, a atribuição e o estado atual
+            da ordem.
+          </p>
+        </div>
+      </div>
+      <div className="workflow-actions-grid">
         {available.has(workflowActionNames.reconcile) && (
           <form action={reconcileOrder} className="form-grid span-2">
             {versionFields}
@@ -187,31 +191,6 @@ export function OrderWorkflowActions({
           <form action={startService}>
             {versionFields}
             <button>Iniciar atendimento</button>
-          </form>
-        )}
-
-        {available.has(workflowActionNames.addServiceEntry) && (
-          <form action={addServiceEntry} className="span-2">
-            {versionFields}
-            <label>
-              Tipo do registro
-              <input name="entry_type" required maxLength={80} />
-            </label>
-            <label>
-              Data do atendimento
-              <input name="serviced_at" type="datetime-local" required />
-            </label>
-            <label>
-              Registro do atendimento
-              <textarea
-                name="description"
-                required
-                minLength={workflowLimits.solutionMin}
-                maxLength={workflowLimits.solutionMax}
-                rows={4}
-              />
-            </label>
-            <button>Registrar atendimento</button>
           </form>
         )}
 

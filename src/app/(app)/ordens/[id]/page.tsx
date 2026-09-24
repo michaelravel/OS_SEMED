@@ -1,11 +1,14 @@
 import { notFound } from "next/navigation";
 import { z } from "zod";
-import { Heading, Notice } from "@/components/ui";
+import { Notice } from "@/components/ui";
 import { OrderActivity } from "@/components/order-details/order-activity";
 import { OrderAdministration } from "@/components/order-details/order-administration";
 import { OrderAttachments } from "@/components/order-details/order-attachments";
 import { OrderSummary } from "@/components/order-details/order-summary";
 import { OrderWorkflowActions } from "@/components/order-details/order-workflow-actions";
+import { OrderHeader } from "@/components/order-details/order-header";
+import { OrderCycle } from "@/components/order-details/order-cycle";
+import { OrderService } from "@/components/order-details/order-service";
 import { queryLimits } from "@/lib/application-config";
 import { roleNames, workflowActionNames } from "@/lib/domain";
 import { session } from "@/lib/session";
@@ -30,7 +33,7 @@ export default async function OrderPage({
   const { data, error } = await db
     .from("os_orders")
     .select(
-      "id,protocol,version,title,status,priority,resolution,unit_id,destination_unit_id,opened_by,responsible_id,category_id,driver_id,vehicle_id,route_id,details,opened_at",
+      "id,protocol,protocol_year,protocol_code,version,title,status,priority,resolution,unit_id,destination_unit_id,opened_by,responsible_id,category_id,driver_id,vehicle_id,route_id,details,opened_at,resume_status,waiting_reason,waiting_details",
     )
     .eq("id", id)
     .maybeSingle();
@@ -50,6 +53,7 @@ export default async function OrderPage({
     attachmentPolicies,
     workflowMemberships,
     collaboration,
+    orderHeader,
   ] = await Promise.all([
     db
       .from("os_messages")
@@ -104,6 +108,7 @@ export default async function OrderPage({
           .limit(queryLimits.lookupRows)
       : Promise.resolve({ data: [], error: null }),
     db.rpc("os_order_can_collaborate", { target: id }),
+    db.rpc("os_order_header", { target: id }),
   ]);
 
   ensureQueriesSucceeded(
@@ -119,12 +124,12 @@ export default async function OrderPage({
       attachmentPolicies,
       workflowMemberships,
       collaboration,
+      orderHeader,
     ],
     "Falha ao consultar detalhes",
   );
 
   const canPost = collaboration.data === true;
-  const unit = units.data?.find((item) => item.id === order.unit_id);
   const catalogRows = (catalogs.data ?? []) as OrderCatalog[];
   const profileName = new Map(
     (profiles.data ?? []).map((profile) => [profile.id, profile.name]),
@@ -163,11 +168,9 @@ export default async function OrderPage({
 
   return (
     <>
-      <Heading
-        title={order.title}
-        description={`Protocolo OS-${String(order.protocol).padStart(6, "0")} · ${unit?.name ?? "Unidade aguardando conciliação"}`}
-      />
+      <OrderHeader order={order} header={orderHeader.data?.[0]} />
       <Notice error={(await searchParams).erro} />
+      <OrderCycle order={order} />
       <div className="detail-grid">
         <OrderSummary
           order={order}
@@ -189,6 +192,14 @@ export default async function OrderPage({
         responsibleMemberships={responsibleMemberships}
         catalogs={catalogRows}
       />
+      <OrderService
+        id={id}
+        version={order.version}
+        entries={serviceEntries.data ?? []}
+        canAdd={workflowOperations.some(
+          ({ operation }) => operation === workflowActionNames.addServiceEntry,
+        )}
+      />
       {workflowOperations.some(
         ({ operation }) => operation === workflowActionNames.edit,
       ) && (
@@ -201,7 +212,6 @@ export default async function OrderPage({
         id={id}
         userId={user.id}
         events={events.data ?? []}
-        serviceEntries={serviceEntries.data ?? []}
         messages={messages.data ?? []}
         canPost={canPost}
       />

@@ -1,4 +1,4 @@
-import { Badge, date } from "@/components/ui";
+import { date } from "@/components/ui";
 import type { OrderDetails } from "@/lib/domain";
 import type { OrderCatalog, OrderDetail } from "./types";
 
@@ -21,19 +21,14 @@ export function OrderSummary({
   return (
     <section className="card">
       <div className="section-head">
-        <h2>Resumo da solicitação</h2>
-        <Badge status={order.status} />
+        <div>
+          <p className="eyebrow">SOLICITAÇÃO</p>
+          <h2>Dados informados</h2>
+        </div>
       </div>
       <dl className="details">
         <dt>Abertura</dt>
         <dd>{date(order.opened_at)}</dd>
-        <dt>Prioridade</dt>
-        <dd>{order.priority}</dd>
-        <dt>Classificação</dt>
-        <dd>
-          {catalogs.find((catalog) => catalog.id === order.category_id)?.name ??
-            "Aguardando conciliação"}
-        </dd>
         <dt>Motorista</dt>
         <dd>
           {order.driver_id ? catalogName(order.driver_id) : "Não informado"}

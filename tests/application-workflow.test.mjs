@@ -20,6 +20,25 @@ const summaryUi = await fs.readFile(
   ),
   "utf8",
 );
+const serviceUi = await fs.readFile(
+  new URL(
+    "../src/components/order-details/order-service.tsx",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const headerUi = await fs.readFile(
+  new URL("../src/components/order-details/order-header.tsx", import.meta.url),
+  "utf8",
+);
+const cycleUi = await fs.readFile(
+  new URL("../src/components/order-details/order-cycle.tsx", import.meta.url),
+  "utf8",
+);
+const activityUi = await fs.readFile(
+  new URL("../src/components/order-details/order-activity.tsx", import.meta.url),
+  "utf8",
+);
 
 test("Server Actions usam uma RPC específica e tratamento seguro por operação", () => {
   const contracts = [
@@ -62,7 +81,6 @@ test("interface usa o contrato de operações e não o avanço genérico", () =>
     "assign",
     "reassign",
     "startService",
-    "addServiceEntry",
     "waitInformation",
     "resume",
     "complete",
@@ -75,4 +93,26 @@ test("interface usa o contrato de operações e não o avanço genérico", () =>
     );
   assert.ok(!summaryUi.includes("changeStatus"));
   assert.ok(!summaryUi.includes("next_status"));
+  assert.ok(serviceUi.includes("addServiceEntry"));
+  assert.ok(serviceUi.includes("serviceEntryTypes"));
+});
+
+test("detalhe apresenta cabeçalho, ciclo e separa atendimento de comunicação", () => {
+  for (const label of [
+    "Categoria",
+    "Solicitante",
+    "Unidade de origem",
+    "Unidade executora",
+    "Responsável",
+  ]) {
+    assert.ok(headerUi.includes(label), `cabeçalho deveria exibir ${label}`);
+  }
+  assert.ok(headerUi.includes("OS aguardando conferência"));
+  assert.ok(cycleUi.includes("buildOrderCycle"));
+  assert.ok(cycleUi.includes("Aguardando informação"));
+  assert.ok(
+    serviceUi.toUpperCase().includes("REGISTRO FORMAL DE ATENDIMENTO"),
+  );
+  assert.ok(activityUi.includes("COMUNICAÇÃO"));
+  assert.ok(!activityUi.includes("serviceEntries"));
 });

@@ -84,6 +84,16 @@ export const orderWaitReasons = [
 ] as const;
 export type OrderWaitReason = (typeof orderWaitReasons)[number];
 
+export const serviceEntryTypeNames = {
+  diagnosis: "diagnóstico",
+  action: "ação realizada",
+  visit: "visita",
+  material: "material",
+  technicalNote: "observação técnica",
+} as const;
+export const serviceEntryTypes = Object.values(serviceEntryTypeNames);
+export type ServiceEntryType = (typeof serviceEntryTypes)[number];
+
 export const orderResumeStatuses = [
   canonicalOrderStatusNames.triage,
   canonicalOrderStatusNames.forwarded,
@@ -372,7 +382,7 @@ export const orderReassignmentSchema = orderAssignmentSchema.extend({
     .max(workflowLimits.justificationMax),
 });
 export const orderServiceEntrySchema = orderVersionedSchema.extend({
-  entry_type: z.string().trim().min(1).max(80),
+  entry_type: z.enum(serviceEntryTypes),
   description: z
     .string()
     .trim()
@@ -428,3 +438,78 @@ export const orderJustificationSchema = orderVersionedSchema.extend({
     .min(workflowLimits.justificationMin)
     .max(workflowLimits.justificationMax),
 });
+
+export const orderCycleStages = [
+  { key: "opening", label: "Abertura" },
+  { key: "triage", label: "Triagem" },
+  { key: "forwarding", label: "Encaminhamento" },
+  { key: "assignment", label: "Atribuição" },
+  { key: "service", label: "Atendimento" },
+  { key: "completion", label: "Conclusão" },
+] as const;
+
+export type OrderCycleStageState = "upcoming" | "current" | "completed";
+export type OrderCyclePresentation = {
+  stages: Array<
+    (typeof orderCycleStages)[number] & { state: OrderCycleStageState }
+  >;
+  waiting: boolean;
+  pendingReview: boolean;
+  completed: boolean;
+  canceled: boolean;
+};
+
+const stageByStatus = new Map<string, number>([
+  [canonicalOrderStatusNames.open, 0],
+  [canonicalOrderStatusNames.triage, 1],
+  [canonicalOrderStatusNames.forwarded, 2],
+  [canonicalOrderStatusNames.assigned, 3],
+  [canonicalOrderStatusNames.inService, 4],
+  [canonicalOrderStatusNames.completed, 5],
+]);
+
+export function formatOrderProtocol(
+  protocol: number,
+  protocolCode: string | null,
+  protocolYear: number | null,
+) {
+  if (protocolCode && protocolYear)
+    return `OS ${protocolCode.padStart(6, "0")}/${protocolYear}`;
+  return `OS-${String(protocol).padStart(6, "0")}`;
+}
+
+export function buildOrderCycle(
+  status: string,
+  resumeStatus: OrderResumeStatus | null,
+): OrderCyclePresentation {
+  const normalized = normalizeOrderStatus(status);
+  const canonicalStatus = normalized?.status;
+  const waiting =
+    canonicalStatus === canonicalOrderStatusNames.waitingInformation;
+  const effectiveStatus = waiting
+    ? resumeStatus ?? canonicalOrderStatusNames.inService
+    : canonicalStatus;
+  const completed = canonicalStatus === canonicalOrderStatusNames.completed;
+  const canceled = canonicalStatus === canonicalOrderStatusNames.canceled;
+  const pendingReview =
+    canonicalStatus === canonicalOrderStatusNames.pendingReview || !canonicalStatus;
+  const currentIndex = completed
+    ? orderCycleStages.length - 1
+    : (stageByStatus.get(effectiveStatus ?? "") ?? -1);
+
+  return {
+    stages: orderCycleStages.map((stage, index) => ({
+      ...stage,
+      state:
+        completed || index < currentIndex
+          ? "completed"
+          : index === currentIndex && !canceled && !pendingReview
+            ? "current"
+            : "upcoming",
+    })),
+    waiting,
+    pendingReview,
+    completed,
+    canceled,
+  };
+}

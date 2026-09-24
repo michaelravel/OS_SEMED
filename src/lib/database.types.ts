@@ -207,6 +207,16 @@ export type Database = {
         Args: { target: string };
         Returns: boolean;
       };
+      os_order_header: {
+        Args: { target: string };
+        Returns: {
+          category_name: string | null;
+          requester_name: string | null;
+          origin_unit_name: string | null;
+          destination_unit_name: string | null;
+          responsible_name: string | null;
+        }[];
+      };
       os_assign_order: {
         Args:
           | {

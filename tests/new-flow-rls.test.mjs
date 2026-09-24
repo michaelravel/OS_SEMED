@@ -175,6 +175,41 @@ test("RLS do novo fluxo separa origem, execução, autoria e dados internos", as
       users.destinationManager,
       users.assigned,
     ];
+    assert.deepEqual(
+      (
+        await asUser(
+          users.requester,
+          `select requester_name,origin_unit_name,destination_unit_name,responsible_name
+           from os_order_header('${order}')`,
+        )
+      ).rows,
+      [
+        {
+          requester_name: "Usuário de teste",
+          origin_unit_name: "Origem",
+          destination_unit_name: "Executora",
+          responsible_name: null,
+        },
+      ],
+    );
+    assert.deepEqual(
+      (
+        await asUser(
+          users.originManager,
+          `select responsible_name from os_order_header('${order}')`,
+        )
+      ).rows,
+      [{ responsible_name: "Usuário de teste" }],
+    );
+    assert.equal(
+      (
+        await asUser(
+          users.outsider,
+          `select * from os_order_header('${order}')`,
+        )
+      ).rows.length,
+      0,
+    );
     for (const user of internalActors) {
       assert.equal(await countAs(user, "os_orders", `id='${order}'`), 1);
       assert.equal(
@@ -388,6 +423,7 @@ test("RLS do novo fluxo separa origem, execução, autoria e dados internos", as
     await assert.rejects(
       asAnon(`select os_order_can_collaborate('${order}')`),
     );
+    await assert.rejects(asAnon(`select * from os_order_header('${order}')`));
   } finally {
     await db.close();
   }

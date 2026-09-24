@@ -10,6 +10,8 @@ export type OrderDetail = Pick<
   Order,
   | "id"
   | "protocol"
+  | "protocol_year"
+  | "protocol_code"
   | "version"
   | "title"
   | "status"
@@ -25,6 +27,9 @@ export type OrderDetail = Pick<
   | "route_id"
   | "details"
   | "opened_at"
+  | "resume_status"
+  | "waiting_reason"
+  | "waiting_details"
 >;
 export type OrderCatalog = Pick<Catalog, "id" | "kind" | "name">;
 export type OrderMessage = Pick<
@@ -47,3 +52,5 @@ export type AvailableWorkflowAction =
   Database["public"]["Functions"]["os_order_available_actions"]["Returns"][number];
 export type AttachmentPolicy =
   Database["public"]["Functions"]["os_attachment_policy"]["Returns"][number];
+export type OrderHeaderData =
+  Database["public"]["Functions"]["os_order_header"]["Returns"][number];
