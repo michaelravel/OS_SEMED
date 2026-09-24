@@ -86,7 +86,12 @@ export default async function Users({
           <input type="hidden" name="id" value={item?.id ?? ""} />
           <label>
             Identificador da conta (UUID)
-            <input name="user_id" required defaultValue={item?.user_id ?? ""} />
+            <input
+              name="user_id"
+              required
+              readOnly={Boolean(item)}
+              defaultValue={item?.user_id ?? ""}
+            />
           </label>
           <label>
             Nome do profissional

@@ -22,6 +22,12 @@ type Attachment = {
   path: string;
   mime_type: string;
   size_bytes: number;
+  storage_status: string;
+  inspection_status: string;
+  content_sha256: string | null;
+  storage_verified_at: string | null;
+  inspected_at: string | null;
+  quarantined_at: string | null;
   created_at: string;
 };
 type OrderEvent = {
@@ -110,6 +116,107 @@ export type Database = {
           detail_patch: Json;
         };
         Returns: undefined;
+      };
+      os_save_unit: {
+        Args: {
+          target: string | null;
+          unit_name: string;
+          unit_type: string;
+          unit_address: string;
+          unit_coordinates: string;
+          unit_active: boolean;
+        };
+        Returns: string;
+      };
+      os_save_catalog: {
+        Args: {
+          target: string | null;
+          catalog_kind: string;
+          catalog_name: string;
+          catalog_data: Json;
+          catalog_active: boolean;
+        };
+        Returns: string;
+      };
+      os_save_membership: {
+        Args: {
+          target: string | null;
+          target_user: string;
+          target_unit: string | null;
+          target_role: string;
+          target_active: boolean;
+          target_name: string;
+        };
+        Returns: string;
+      };
+      os_grant_admin: {
+        Args: {
+          target_user: string;
+          target_name: string;
+          replaced_membership: string | null;
+        };
+        Returns: string;
+      };
+      os_revoke_admin: {
+        Args: { target: string };
+        Returns: undefined;
+      };
+      os_reclassify_admin: {
+        Args: {
+          target: string;
+          target_unit: string | null;
+          target_role: string;
+          target_active: boolean;
+          target_name: string;
+        };
+        Returns: undefined;
+      };
+      os_attachment_policy: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          max_file_bytes: number;
+          max_attachments_per_order: number;
+          max_bytes_per_order: number;
+          max_bytes_per_user_per_order: number;
+          allowed_mimes: string[];
+          allowed_extensions: string[];
+        }[];
+      };
+      os_begin_attachment_upload: {
+        Args: {
+          target_order: string;
+          attachment_id: string;
+          original_name: string;
+          declared_mime: string;
+          declared_size: number;
+          sha256: string;
+        };
+        Returns: string;
+      };
+      os_complete_attachment_upload: {
+        Args: { target: string };
+        Returns: string;
+      };
+      os_abort_attachment_upload: {
+        Args: { target: string };
+        Returns: string;
+      };
+      os_attachment_reconciliation: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          issue: string;
+          path: string;
+          attachment_id: string | null;
+          order_id: string | null;
+          metadata_size: number | null;
+          storage_size: number | null;
+          storage_status: string | null;
+          created_at: string | null;
+        }[];
+      };
+      os_reconcile_attachment: {
+        Args: { target: string };
+        Returns: string;
       };
     };
     Enums: Record<string, never>;

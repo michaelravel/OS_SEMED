@@ -5,7 +5,6 @@ import { z } from "zod";
 import { supabase, configured } from "@/lib/supabase";
 import { session } from "@/lib/session";
 import {
-  allowedMimes,
   advanceOrderSchema,
   catalogFields,
   completeOrderSchema,
@@ -14,47 +13,20 @@ import {
   priorities,
   roles,
 } from "@/lib/domain";
+import {
+  attachmentBucket,
+  attachmentContentMatches,
+  attachmentExtensionMatches,
+  attachmentMimeTypes,
+  attachmentSha256,
+  normalizeAttachmentName,
+} from "@/lib/attachments";
 
 function text(form: FormData, key: string) {
   return String(form.get(key) ?? "");
 }
 function failed(path: string): never {
   redirect(`${path}?erro=1`);
-}
-function safeFileName(name: string) {
-  return name
-    .replace(/[\\/\u0000-\u001f\u007f]/g, "_")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-async function matchesDeclaredType(file: File) {
-  const bytes = new Uint8Array(await file.slice(0, 16).arrayBuffer());
-  const starts = (...signature: number[]) =>
-    signature.every((value, index) => bytes[index] === value);
-  switch (file.type) {
-    case "application/pdf":
-      return starts(0x25, 0x50, 0x44, 0x46, 0x2d);
-    case "image/jpeg":
-      return starts(0xff, 0xd8, 0xff);
-    case "image/png":
-      return starts(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
-    case "image/webp":
-      return (
-        starts(0x52, 0x49, 0x46, 0x46) &&
-        bytes[8] === 0x57 &&
-        bytes[9] === 0x45 &&
-        bytes[10] === 0x42 &&
-        bytes[11] === 0x50
-      );
-    case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
-    case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-      return starts(0x50, 0x4b, 0x03, 0x04);
-    case "text/plain":
-    case "text/csv":
-      return !bytes.includes(0);
-    default:
-      return false;
-  }
 }
 export async function login(form: FormData) {
   if (!configured()) redirect("/configuracao");
@@ -237,39 +209,56 @@ export async function addMessage(form: FormData) {
   revalidatePath(`/ordens/${id}`);
 }
 export async function uploadAttachment(form: FormData) {
-  const { db, user } = await session();
+  const { db } = await session();
   const orderId = z.uuid().parse(text(form, "id"));
   const file = form.get("file");
+  const { data: policies, error: policyError } = await db.rpc(
+    "os_attachment_policy",
+  );
+  const policy = policies?.[0];
   if (
     !(file instanceof File) ||
+    policyError ||
+    !policy ||
     file.size < 1 ||
-    file.size > 3145728 ||
-    !allowedMimes.includes(file.type) ||
-    file.name.length > 250
+    file.size > Number(policy.max_file_bytes) ||
+    !policy.allowed_mimes.includes(file.type) ||
+    !attachmentMimeTypes.includes(file.type)
   )
     failed(`/ordens/${orderId}`);
-  const name = safeFileName(file.name);
-  if (!name || name.length > 250 || !(await matchesDeclaredType(file)))
+  const name = normalizeAttachmentName(file.name);
+  if (
+    !name ||
+    !attachmentExtensionMatches(name, file.type) ||
+    !(await attachmentContentMatches(file))
+  )
     failed(`/ordens/${orderId}`);
   const id = crypto.randomUUID();
-  const path = `${orderId}/${id}`;
-  const { error: metaError } = await db.from("os_attachments").insert({
-    id,
-    order_id: orderId,
-    uploaded_by: user.id,
-    name,
-    path,
-    mime_type: file.type,
-    size_bytes: file.size,
-  });
-  if (metaError) failed(`/ordens/${orderId}`);
-  const { error } = await db.storage
-    .from("os-attachments")
+  const sha256 = await attachmentSha256(file);
+  const { data: path, error: reserveError } = await db.rpc(
+    "os_begin_attachment_upload",
+    {
+      target_order: orderId,
+      attachment_id: id,
+      original_name: name,
+      declared_mime: file.type,
+      declared_size: file.size,
+      sha256,
+    },
+  );
+  if (reserveError || !path) failed(`/ordens/${orderId}`);
+  const { error: uploadError } = await db.storage
+    .from(attachmentBucket)
     .upload(path, file, { contentType: file.type, upsert: false });
-  if (error) {
-    await db.from("os_attachments").delete().eq("id", id);
+  if (uploadError) {
+    await db.rpc("os_abort_attachment_upload", { target: id });
     failed(`/ordens/${orderId}`);
   }
+  const { data: completion, error: completionError } = await db.rpc(
+    "os_complete_attachment_upload",
+    { target: id },
+  );
+  if (completionError || completion !== "ready") failed(`/ordens/${orderId}`);
   revalidatePath(`/ordens/${orderId}`);
 }
 export async function saveCatalog(form: FormData) {
@@ -288,13 +277,14 @@ export async function saveCatalog(form: FormData) {
     if (!["https:", "http:"].includes(new URL(url).protocol))
       failed(`/cadastros/${kind}`);
   }
-  const payload = { name, kind, data, active: form.get("active") === "on" };
-  const result = id
-    ? await db.from("os_catalogs").update(payload).eq("id", id).eq("kind", kind)
-    : await db
-        .from("os_catalogs")
-        .insert({ ...payload, legacy_id: `NEW-${crypto.randomUUID()}` });
-  if (result.error) failed(`/cadastros/${kind}`);
+  const { error } = await db.rpc("os_save_catalog", {
+    target: id || null,
+    catalog_kind: kind,
+    catalog_name: name,
+    catalog_data: data,
+    catalog_active: form.get("active") === "on",
+  });
+  if (error) failed(`/cadastros/${kind}`);
   revalidatePath(`/cadastros/${kind}`);
   redirect(`/cadastros/${kind}`);
 }
@@ -311,11 +301,15 @@ export async function saveUnit(form: FormData) {
       coordinates: z.string().max(100),
     })
     .parse(Object.fromEntries(form));
-  const payload = { ...input, active: form.get("active") === "on" };
-  const result = id
-    ? await db.from("os_units").update(payload).eq("id", id)
-    : await db.from("os_units").insert(payload);
-  if (result.error) failed("/unidades");
+  const { error } = await db.rpc("os_save_unit", {
+    target: id || null,
+    unit_name: input.name,
+    unit_type: input.type,
+    unit_address: input.address,
+    unit_coordinates: input.coordinates,
+    unit_active: form.get("active") === "on",
+  });
+  if (error) failed("/unidades");
   revalidatePath("/unidades");
   redirect("/unidades");
 }
@@ -331,17 +325,48 @@ export async function saveMembership(form: FormData) {
   const name = z.string().trim().min(1).max(200).parse(text(form, "name"));
   const active = form.get("active") === "on";
   if (userId === user.id && !active) failed("/usuarios");
-  const { error: profileError } = await db
-    .from("os_profiles")
-    .upsert({ id: userId, name });
-  if (profileError) failed("/usuarios");
   const id = text(form, "id");
   if (id) z.uuid().parse(id);
-  const payload = { user_id: userId, unit_id: unit || null, role, active };
-  const result = id
-    ? await db.from("os_memberships").update(payload).eq("id", id)
-    : await db.from("os_memberships").insert(payload);
-  if (result.error) failed("/usuarios");
+  const current = id
+    ? await db
+        .from("os_memberships")
+        .select("id,user_id,role")
+        .eq("id", id)
+        .single()
+    : null;
+  if (current?.error) failed("/usuarios");
+
+  let error: unknown = null;
+  if (role === "admin") {
+    if (!active) {
+      if (!id || current?.data.role !== "admin") failed("/usuarios");
+      ({ error } = await db.rpc("os_revoke_admin", { target: id }));
+    } else {
+      ({ error } = await db.rpc("os_grant_admin", {
+        target_user: userId,
+        target_name: name,
+        replaced_membership: id || null,
+      }));
+    }
+  } else if (current?.data.role === "admin") {
+    ({ error } = await db.rpc("os_reclassify_admin", {
+      target: id,
+      target_unit: unit || null,
+      target_role: role,
+      target_active: active,
+      target_name: name,
+    }));
+  } else {
+    ({ error } = await db.rpc("os_save_membership", {
+      target: id || null,
+      target_user: userId,
+      target_unit: unit || null,
+      target_role: role,
+      target_active: active,
+      target_name: name,
+    }));
+  }
+  if (error) failed("/usuarios");
   revalidatePath("/usuarios");
   redirect("/usuarios");
 }

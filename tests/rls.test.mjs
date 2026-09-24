@@ -19,7 +19,10 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
       grant usage on schema auth to anon,authenticated;
       grant execute on function auth.uid() to anon,authenticated;
       create schema storage; create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
-      create table storage.objects(id uuid default gen_random_uuid(),bucket_id text,name text);
+      create table storage.objects(
+        id uuid default gen_random_uuid(),bucket_id text,name text,
+        metadata jsonb not null default '{}',created_at timestamptz not null default now()
+      );
       alter table storage.objects enable row level security;
       grant usage on schema storage to authenticated; grant select,insert on storage.objects to authenticated;`);
     await db.exec(migrations[0]);
@@ -43,23 +46,39 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
     ] = ids;
     const legacyOrder = "00000000-0000-4000-a000-000000000100";
     const legacyClosed = "00000000-0000-4000-a000-000000000101";
+    const routeUsed = "00000000-0000-4000-a000-000000000110";
+    const routeOther = "00000000-0000-4000-a000-000000000111";
+    const routeInactive = "00000000-0000-4000-a000-000000000112";
     await db.exec(`insert into auth.users(id) values ${ids
       .slice(0, 7)
       .map((id) => `('${id}')`)
       .join(",")};
       insert into os_profiles(id,name) select id,'Teste' from auth.users;
       insert into os_units(id,name) values('${unitA}','A'),('${unitB}','B');
-      insert into os_catalogs(id,legacy_id,kind,name) values('${cat}','L1','logistics','Categoria');
+      insert into os_catalogs(id,legacy_id,kind,name,active) values
+      ('${cat}','L1','logistics','Categoria',true),
+      ('${routeUsed}','R1','routes','Rota utilizada',true),
+      ('${routeOther}','R2','routes','Rota não relacionada',true),
+      ('${routeInactive}','R3','routes','Rota inativa',false);
       insert into os_memberships(user_id,unit_id,role) values
       ('${admin}',null,'admin'),('${owner}','${unitA}','solicitante'),('${other}','${unitB}','solicitante'),
       ('${tech}','${unitA}','responsavel'),('${manager}',null,'gestor'),('${schoolManager}','${unitA}','gestor');
-      insert into os_orders(id,unit_id,opened_by,responsible_id,category_id,title) values
-      ('${orderA}','${unitA}','${owner}','${tech}','${cat}','Ordem A'),('${orderB}','${unitB}','${other}',null,'${cat}','Ordem B');
+      insert into os_orders(id,unit_id,opened_by,responsible_id,category_id,title,details) values
+      ('${orderA}','${unitA}','${owner}','${tech}','${cat}','Ordem A','{"route":"${routeUsed}"}'),
+      ('${orderB}','${unitB}','${other}',null,'${cat}','Ordem B','{}');
       insert into os_orders(id,title,status) values
       ('${legacyOrder}','Importada pendente','A conferir'),
       ('${legacyClosed}','Encerrada legada','Concluída');`);
     // Simula a atualização de um banco já populado e valida o backfill.
     await db.exec(migrations.slice(1).join("\n"));
+    assert.deepEqual(
+      (
+        await db.query(
+          "select public,file_size_limit from storage.buckets where id='os-attachments'",
+        )
+      ).rows,
+      [{ public: false, file_size_limit: 3145728 }],
+    );
     const legacyRows = await db.query(
       `select id,status,unit_id,opened_by,category_id,resolution
        from os_orders where id in ('${legacyOrder}','${legacyClosed}') order by id`,
@@ -113,10 +132,34 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
       (await asUser(owner, "select id from os_units")).rows.map((r) => r.id),
       [unitA],
     );
-    assert.equal(
-      (await asUser(unbound, "select id from os_catalogs")).rows.length,
-      0,
-    );
+    const visibleCatalogs = async (id) =>
+      (await asUser(id, "select id from os_catalogs order by id")).rows.map(
+        (row) => row.id,
+      );
+    assert.deepEqual(await visibleCatalogs(admin), [
+      cat,
+      routeUsed,
+      routeOther,
+      routeInactive,
+    ]);
+    assert.deepEqual(await visibleCatalogs(manager), [
+      cat,
+      routeUsed,
+      routeOther,
+    ]);
+    assert.deepEqual(await visibleCatalogs(owner), [
+      cat,
+      routeUsed,
+      routeOther,
+    ]);
+    assert.deepEqual(await visibleCatalogs(other), [
+      cat,
+      routeUsed,
+      routeOther,
+    ]);
+    assert.deepEqual(await visibleCatalogs(tech), [cat, routeUsed]);
+    assert.deepEqual(await visibleCatalogs(schoolManager), [cat, routeUsed]);
+    assert.deepEqual(await visibleCatalogs(unbound), []);
     await assert.rejects(
       asUser(
         owner,
@@ -157,6 +200,87 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
         owner,
         `insert into os_memberships(user_id,role) values('${owner}','admin')`,
       ),
+    );
+    await assert.rejects(
+      asUser(admin, `update os_units set name='Direto' where id='${unitA}'`),
+    );
+    await assert.rejects(
+      asUser(
+        admin,
+        `update os_catalogs set name='Direto' where id='${routeOther}'`,
+      ),
+    );
+    await assert.rejects(
+      asUser(admin, `update os_profiles set name='Direto' where id='${owner}'`),
+    );
+    await assert.rejects(
+      asUser(
+        admin,
+        `update os_memberships set role='admin',unit_id=null where user_id='${owner}'`,
+      ),
+    );
+    await assert.rejects(
+      asUser(
+        owner,
+        `select os_save_catalog('${routeOther}','routes','Negado','{"routeId":"2"}',true)`,
+      ),
+    );
+    await asUser(admin, `select os_save_unit('${unitA}','A','','','',true)`);
+    await asUser(admin, `select os_save_unit('${unitB}','B','','','',false)`);
+    assert.deepEqual(await visibleCatalogs(other), []);
+    await asUser(admin, `select os_save_unit('${unitB}','B','','','',true)`);
+    await asUser(
+      admin,
+      `select os_save_catalog('${routeOther}','routes','Rota não relacionada','{"routeId":"2","number":"2","link":"https://example.com"}',true)`,
+    );
+    await assert.rejects(
+      asUser(
+        admin,
+        `select os_save_catalog('${routeOther}','routes','Inválido','{"secret":"x"}',true)`,
+      ),
+    );
+    await assert.rejects(
+      asUser(owner, `select os_grant_admin('${unbound}','Admin 2',null)`),
+    );
+    await asUser(admin, `select os_grant_admin('${unbound}','Admin 2',null)`);
+    const secondAdminMembership = (
+      await asUser(
+        admin,
+        `select id from os_memberships where user_id='${unbound}' and role='admin'`,
+      )
+    ).rows[0].id;
+    await assert.rejects(
+      asUser(
+        admin,
+        `select os_save_membership('${secondAdminMembership}','${unbound}',null,'gestor',true,'Admin 2')`,
+      ),
+    );
+    await asUser(
+      admin,
+      `select os_reclassify_admin('${secondAdminMembership}',null,'gestor',true,'Gestor 2')`,
+    );
+    await asUser(
+      admin,
+      `select os_grant_admin('${unbound}','Admin 2','${secondAdminMembership}')`,
+    );
+    const replacementAdminMembership = (
+      await asUser(
+        admin,
+        `select id from os_memberships where user_id='${unbound}' and role='admin' and active`,
+      )
+    ).rows[0].id;
+    await asUser(
+      admin,
+      `select os_revoke_admin('${replacementAdminMembership}')`,
+    );
+    const primaryAdminMembership = (
+      await asUser(
+        admin,
+        `select id from os_memberships where user_id='${admin}' and role='admin' and active`,
+      )
+    ).rows[0].id;
+    await assert.rejects(
+      asUser(admin, `select os_revoke_admin('${primaryAdminMembership}')`),
     );
     await assert.rejects(
       asUser(
@@ -273,29 +397,214 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
     );
     assert.ok((await asUser(admin, "select id from os_audit")).rows.length > 0);
     const attachment = "00000000-0000-4000-a000-000000000099";
-    await asUser(
-      owner,
-      `insert into os_attachments(id,order_id,name,path,mime_type,size_bytes) values('${attachment}','${orderA}','a.pdf','${orderA}/${attachment}','application/pdf',10)`,
+    const attachmentSha = "a".repeat(64);
+    const attachmentId = (value) =>
+      `00000000-0000-4000-a000-${String(value).padStart(12, "0")}`;
+    const attachmentPolicy = (
+      await asUser(owner, "select * from os_attachment_policy()")
+    ).rows[0];
+    assert.equal(Number(attachmentPolicy.max_file_bytes), 3145728);
+    assert.equal(Number(attachmentPolicy.max_attachments_per_order), 20);
+    await assert.rejects(
+      asUser(
+        owner,
+        `insert into os_attachments(id,order_id,name,path,mime_type,size_bytes) values('${attachment}','${orderA}','a.pdf','${orderA}/${attachment}','application/pdf',10)`,
+      ),
     );
     await asUser(
       owner,
-      `insert into storage.objects(bucket_id,name) values('os-attachments','${orderA}/${attachment}')`,
+      `select os_begin_attachment_upload(
+        '${orderA}','${attachment}','a.pdf','application/pdf',10,'${attachmentSha}'
+      )`,
     );
     assert.equal(
-      (await asUser(other, "select id from storage.objects")).rows.length,
+      (await asUser(owner, "select id from os_attachments")).rows.length,
       0,
     );
     await assert.rejects(
       asUser(
         other,
-        `insert into storage.objects(bucket_id,name) values('os-attachments','${orderA}/${attachment}')`,
+        `insert into storage.objects(bucket_id,name,metadata) values(
+          'os-attachments','${orderA}/${attachment}','{"size":10}'
+        )`,
       ),
     );
     await assert.rejects(
       asUser(
         owner,
-        `insert into storage.objects(bucket_id,name) values('os-attachments','${orderB}/${attachment}')`,
+        `insert into storage.objects(bucket_id,name,metadata) values(
+          'os-attachments','${orderB}/${attachment}','{"size":10}'
+        )`,
       ),
+    );
+    await asUser(
+      owner,
+      `insert into storage.objects(bucket_id,name,metadata) values(
+        'os-attachments','${orderA}/${attachment}','{"size":10}'
+      )`,
+    );
+    assert.equal(
+      (
+        await asUser(
+          owner,
+          `select os_complete_attachment_upload('${attachment}') as status`,
+        )
+      ).rows[0].status,
+      "ready",
+    );
+    assert.equal(
+      (await asUser(other, "select id from storage.objects")).rows.length,
+      0,
+    );
+    assert.equal(
+      (await asUser(owner, "select id from storage.objects")).rows.length,
+      1,
+    );
+
+    const ownerPending = [200, 201, 202, 203].map(attachmentId);
+    for (const pending of ownerPending) {
+      await asUser(
+        owner,
+        `select os_begin_attachment_upload(
+          '${orderA}','${pending}','limite.pdf','application/pdf',3145728,'${attachmentSha}'
+        )`,
+      );
+    }
+    await assert.rejects(
+      asUser(
+        owner,
+        `select os_begin_attachment_upload(
+          '${orderA}','${attachmentId(204)}','excedente.pdf','application/pdf',3145728,'${attachmentSha}'
+        )`,
+      ),
+    );
+    const adminBytes = [300, 301, 302, 303, 304].map(attachmentId);
+    for (const pending of adminBytes) {
+      await asUser(
+        admin,
+        `select os_begin_attachment_upload(
+          '${orderA}','${pending}','volume.pdf','application/pdf',3145728,'${attachmentSha}'
+        )`,
+      );
+    }
+    await assert.rejects(
+      asUser(
+        tech,
+        `select os_begin_attachment_upload(
+          '${orderA}','${attachmentId(305)}','total.pdf','application/pdf',3145728,'${attachmentSha}'
+        )`,
+      ),
+    );
+    for (const pending of ownerPending) {
+      assert.equal(
+        (
+          await asUser(
+            owner,
+            `select os_abort_attachment_upload('${pending}') as result`,
+          )
+        ).rows[0].result,
+        "metadata_removed",
+      );
+    }
+    for (const pending of adminBytes) {
+      await asUser(admin, `select os_abort_attachment_upload('${pending}')`);
+    }
+
+    const adminPending = Array.from({ length: 19 }, (_, index) =>
+      attachmentId(210 + index),
+    );
+    for (const pending of adminPending) {
+      await asUser(
+        admin,
+        `select os_begin_attachment_upload(
+          '${orderA}','${pending}','contagem.txt','text/plain',1,'${attachmentSha}'
+        )`,
+      );
+    }
+    await assert.rejects(
+      asUser(
+        admin,
+        `select os_begin_attachment_upload(
+          '${orderA}','${attachmentId(229)}','excedente.txt','text/plain',1,'${attachmentSha}'
+        )`,
+      ),
+    );
+    await asUser(
+      admin,
+      `insert into storage.objects(bucket_id,name,metadata) values(
+        'os-attachments','${orderA}/${adminPending[0]}','{"size":1}'
+      )`,
+    );
+    assert.equal(
+      (
+        await asUser(
+          admin,
+          `select os_abort_attachment_upload('${adminPending[0]}') as result`,
+        )
+      ).rows[0].result,
+      "requires_reconciliation",
+    );
+    await assert.rejects(
+      asUser(owner, "select * from os_attachment_reconciliation()"),
+    );
+    assert.ok(
+      (
+        await asUser(
+          admin,
+          `select issue from os_attachment_reconciliation()
+           where attachment_id='${adminPending[0]}'`,
+        )
+      ).rows.some((row) => row.issue === "upload_not_finalized"),
+    );
+    assert.equal(
+      (
+        await asUser(
+          admin,
+          `select os_reconcile_attachment('${adminPending[0]}') as result`,
+        )
+      ).rows[0].result,
+      "ready",
+    );
+    assert.ok(
+      (
+        await asUser(
+          admin,
+          `select issue from os_attachment_reconciliation()
+           where attachment_id='${adminPending[1]}'`,
+        )
+      ).rows.some((row) => row.issue === "metadata_without_object"),
+    );
+    await asUser(
+      admin,
+      `insert into storage.objects(bucket_id,name,metadata) values(
+        'os-attachments','${orderA}/${adminPending[1]}','{"size":2}'
+      )`,
+    );
+    assert.equal(
+      (
+        await asUser(
+          admin,
+          `select os_reconcile_attachment('${adminPending[1]}') as result`,
+        )
+      ).rows[0].result,
+      "quarantined",
+    );
+    const orphanPath = `${orderA}/${attachmentId(299)}`;
+    await db.exec(
+      "reset role; select set_config('request.jwt.claim.sub','',false);",
+    );
+    await db.query(
+      `insert into storage.objects(bucket_id,name,metadata) values(
+        'os-attachments','${orphanPath}','{"size":1}'
+      )`,
+    );
+    assert.ok(
+      (
+        await asUser(
+          admin,
+          `select issue from os_attachment_reconciliation() where path='${orphanPath}'`,
+        )
+      ).rows.some((row) => row.issue === "object_without_metadata"),
     );
     await asUser(
       admin,
@@ -339,7 +648,10 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
     );
     await asUser(
       admin,
-      `update os_memberships set active=false where user_id='${owner}'`,
+      `select os_save_membership(
+        (select id from os_memberships where user_id='${owner}' and role='solicitante'),
+        '${owner}','${unitA}','solicitante',false,'Teste'
+      )`,
     );
     assert.deepEqual(await visible(owner), []);
     await assert.rejects(
@@ -358,6 +670,12 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
     assert.equal(unsecured.rows.length, 0);
     // Executa a conversão real no schema, incluindo reexecução sem sobrescrita.
     await db.exec("select set_config('request.jwt.claim.sub','',false);");
+    await assert.rejects(
+      db.query(
+        `update os_memberships set active=false
+         where user_id='${admin}' and role='admin'`,
+      ),
+    );
     await assert.rejects(
       db.query(
         `insert into os_orders(
@@ -468,7 +786,7 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
     );
     assert.equal(
       (await db.query("select id from os_catalogs")).rows.length,
-      535,
+      538,
     );
     const archived = await db.query(
       "select payload from os_import_records where source='seed/ABERTURA_OS' order by source_id",

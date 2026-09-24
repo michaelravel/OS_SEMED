@@ -106,16 +106,6 @@ export const orderSchema = z.object({
   vehicle: z.string().max(300),
   route: z.string().max(300),
 });
-export const allowedMimes = [
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "text/plain",
-  "text/csv",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-];
 export function isAdmin(memberships: Membership[]) {
   return memberships.some(
     (m) => m.active && m.role === "admin" && m.unit_id === null,

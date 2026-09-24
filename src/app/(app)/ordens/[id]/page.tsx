@@ -48,6 +48,7 @@ export default async function OrderPage({
     catalogs,
     events,
     availableActions,
+    attachmentPolicies,
   ] = await Promise.all([
     db
       .from("os_messages")
@@ -78,6 +79,7 @@ export default async function OrderPage({
       .order("created_at", { ascending: false })
       .limit(100),
     db.rpc("os_order_available_actions", { target: id }),
+    db.rpc("os_attachment_policy"),
   ]);
   if (
     [
@@ -88,6 +90,7 @@ export default async function OrderPage({
       catalogs,
       events,
       availableActions,
+      attachmentPolicies,
     ].some((result) => result.error)
   )
     throw new Error("Falha ao consultar detalhes");
@@ -111,6 +114,7 @@ export default async function OrderPage({
   const catalogName = (value: string) =>
     catalogRows.find((catalog) => catalog.id === value)?.name ?? value;
   const workflowActions = availableActions.data ?? [];
+  const attachmentPolicy = attachmentPolicies.data?.[0];
   const nextStatuses = workflowActions.filter(
     (action) => action.operation === "advance",
   );
@@ -253,7 +257,16 @@ export default async function OrderPage({
         </section>
         <section className="card">
           <h2>Anexos</h2>
-          <p className="muted">Arquivos privados · até 3 MB por arquivo.</p>
+          <p className="muted">
+            Arquivos privados · até{" "}
+            {attachmentPolicy
+              ? Math.floor(
+                  Number(attachmentPolicy.max_file_bytes) / 1024 / 1024,
+                )
+              : 3}{" "}
+            MB por arquivo · máximo de{" "}
+            {attachmentPolicy?.max_attachments_per_order ?? 20} por ordem.
+          </p>
           {attachments.data?.map((a) => (
             <p key={a.id}>
               <Link href={`/anexos/${a.id}`}>{a.name}</Link>{" "}
@@ -272,7 +285,7 @@ export default async function OrderPage({
                   type="file"
                   name="file"
                   required
-                  accept=".pdf,.jpg,.jpeg,.png,.webp,.txt,.csv,.xlsx,.docx"
+                  accept={attachmentPolicy?.allowed_extensions.join(",")}
                 />
               </label>
               <button>Enviar anexo</button>
