@@ -6,11 +6,13 @@ export type OrderDetail = Pick<
   Order,
   | "id"
   | "protocol"
+  | "version"
   | "title"
   | "status"
   | "priority"
   | "resolution"
   | "unit_id"
+  | "destination_unit_id"
   | "opened_by"
   | "responsible_id"
   | "category_id"

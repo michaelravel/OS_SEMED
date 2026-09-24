@@ -463,9 +463,13 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
         `insert into os_messages(order_id,author_id,body) values('${orderA}','${admin}','Falsificada')`,
       ),
     );
+    await asUser(
+      manager,
+      `insert into os_messages(order_id,body) values('${orderA}','Mensagem do gestor')`,
+    );
     await assert.rejects(
       asUser(
-        manager,
+        unbound,
         `insert into os_messages(order_id,body) values('${orderA}','Mensagem')`,
       ),
     );

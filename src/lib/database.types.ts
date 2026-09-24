@@ -1,4 +1,4 @@
-// Contrato do schema os_* até a migration 202609240007. Regenerar após mudanças no banco.
+// Contrato do schema os_* até a migration 202609240008. Regenerar após mudanças no banco.
 import type {
   Catalog,
   Membership,
@@ -103,20 +103,99 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      os_open_order: {
+        Args: {
+          order_title: string;
+          target_unit: string;
+          target_category: string;
+          order_priority: string;
+          order_details: Json;
+          target_driver: string | null;
+          target_vehicle: string | null;
+          target_route: string | null;
+        };
+        Returns: string;
+      };
+      os_reconcile_order: {
+        Args: {
+          target: string;
+          expected_version: number;
+          target_unit: string;
+          target_opened_by: string;
+          target_category: string;
+        };
+        Returns: undefined;
+      };
+      os_start_triage: {
+        Args: { target: string; expected_version: number };
+        Returns: undefined;
+      };
+      os_forward_order: {
+        Args: {
+          target: string;
+          expected_version: number;
+          destination_unit: string;
+        };
+        Returns: undefined;
+      };
+      os_reassign_order: {
+        Args: {
+          target: string;
+          expected_version: number;
+          responsible_membership: string;
+          justification: string;
+        };
+        Returns: undefined;
+      };
+      os_start_service: {
+        Args: { target: string; expected_version: number };
+        Returns: undefined;
+      };
+      os_add_service_entry: {
+        Args: {
+          target: string;
+          expected_version: number;
+          entry_kind: string;
+          entry_description: string;
+          serviced_on: string;
+        };
+        Returns: number;
+      };
+      os_wait_for_information: {
+        Args: {
+          target: string;
+          expected_version: number;
+          wait_reason: string;
+          wait_details: string;
+        };
+        Returns: undefined;
+      };
+      os_resume_service: {
+        Args: { target: string; expected_version: number };
+        Returns: undefined;
+      };
       os_change_status: {
         Args: { target: string; next_status: string; reason: string };
         Returns: undefined;
       };
       os_complete_order: {
-        Args: { target: string; solution: string };
+        Args: { target: string; expected_version: number; solution: string };
         Returns: undefined;
       };
       os_cancel_order: {
-        Args: { target: string; justification: string };
+        Args: {
+          target: string;
+          expected_version: number;
+          justification: string;
+        };
         Returns: undefined;
       };
       os_reopen_order: {
-        Args: { target: string; justification: string };
+        Args: {
+          target: string;
+          expected_version: number;
+          justification: string;
+        };
         Returns: undefined;
       };
       os_order_available_actions: {
@@ -124,12 +203,29 @@ export type Database = {
         Returns: { next_status: string; operation: string }[];
       };
       os_assign_order: {
+        Args:
+          | {
+              target: string;
+              expected_version: number;
+              responsible_membership: string;
+            }
+          | {
+              target: string;
+              target_unit: string;
+              target_responsible: string | null;
+              target_opened_by: string | null;
+              target_category: string;
+            };
+        Returns: undefined;
+      };
+      os_edit_order_controlled: {
         Args: {
           target: string;
-          target_unit: string;
-          target_responsible: string | null;
-          target_opened_by: string | null;
-          target_category: string;
+          expected_version: number;
+          new_title: string;
+          new_priority: string;
+          priority_justification: string;
+          detail_patch: Json;
         };
         Returns: undefined;
       };

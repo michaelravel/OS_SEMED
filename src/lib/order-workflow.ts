@@ -98,14 +98,17 @@ export const orderOperationNames = {
   startTriage: "start_triage",
   forward: "forward",
   assign: "assign",
+  reassign: "reassign",
   returnToTriage: "return_to_triage",
   returnToForwarding: "return_to_forwarding",
   startService: "start_service",
+  addServiceEntry: "add_service_entry",
   waitForInformation: "wait_for_information",
   resume: "resume",
   complete: "complete",
   cancel: "cancel",
   reopen: "reopen",
+  edit: "edit",
 } as const;
 export const orderOperations = [
   orderOperationNames.open,
@@ -113,14 +116,17 @@ export const orderOperations = [
   orderOperationNames.startTriage,
   orderOperationNames.forward,
   orderOperationNames.assign,
+  orderOperationNames.reassign,
   orderOperationNames.returnToTriage,
   orderOperationNames.returnToForwarding,
   orderOperationNames.startService,
+  orderOperationNames.addServiceEntry,
   orderOperationNames.waitForInformation,
   orderOperationNames.resume,
   orderOperationNames.complete,
   orderOperationNames.cancel,
   orderOperationNames.reopen,
+  orderOperationNames.edit,
 ] as const;
 export type OrderOperation = (typeof orderOperations)[number];
 
@@ -324,6 +330,39 @@ export const orderWaitReasonSchema = z.enum(orderWaitReasons);
 export const orderPrioritySchema = z.enum(priorities);
 
 const workflowIdSchema = z.uuid();
+export const orderVersionedSchema = z.object({
+  id: workflowIdSchema,
+  version: z.coerce.number().int().positive(),
+});
+export const orderReconciliationSchema = orderVersionedSchema.extend({
+  unit_id: z.uuid(),
+  opened_by: z.uuid(),
+  category_id: z.uuid(),
+});
+export const orderForwardSchema = orderVersionedSchema.extend({
+  destination_unit_id: z.uuid(),
+});
+export const orderAssignmentSchema = orderVersionedSchema.extend({
+  responsible_membership_id: z.uuid(),
+});
+export const orderReassignmentSchema = orderAssignmentSchema.extend({
+  justification: z
+    .string()
+    .trim()
+    .min(workflowLimits.justificationMin)
+    .max(workflowLimits.justificationMax),
+});
+export const orderServiceEntrySchema = orderVersionedSchema.extend({
+  entry_type: z.string().trim().min(1).max(80),
+  description: z
+    .string()
+    .trim()
+    .min(workflowLimits.solutionMin)
+    .max(workflowLimits.solutionMax),
+  serviced_at: z.string().refine((value) => Number.isFinite(Date.parse(value)), {
+    message: "Data de atendimento inválida",
+  }),
+});
 export const orderTransitionRequestSchema = z
   .object({
     id: workflowIdSchema,
@@ -346,19 +385,16 @@ export const orderTransitionRequestSchema = z
       });
   });
 
-export const orderWaitingSchema = z.object({
-  id: workflowIdSchema,
+export const orderWaitingSchema = orderVersionedSchema.extend({
   waitingReason: orderWaitReasonSchema,
   justification: z
     .string()
     .trim()
     .min(workflowLimits.justificationMin)
     .max(workflowLimits.justificationMax),
-  resumeStatus: z.enum(orderResumeStatuses),
 });
 
-export const orderCompletionSchema = z.object({
-  id: workflowIdSchema,
+export const orderCompletionSchema = orderVersionedSchema.extend({
   solution: z
     .string()
     .trim()
@@ -366,8 +402,7 @@ export const orderCompletionSchema = z.object({
     .max(workflowLimits.solutionMax),
 });
 
-export const orderJustificationSchema = z.object({
-  id: workflowIdSchema,
+export const orderJustificationSchema = orderVersionedSchema.extend({
   justification: z
     .string()
     .trim()

@@ -106,6 +106,7 @@ export function OrderSummary({
       {canComplete && (
         <form action={completeOrder}>
           <input type="hidden" name="id" value={id} />
+          <input type="hidden" name="version" value={order.version} />
           <label>
             Solução aplicada
             <textarea
@@ -122,6 +123,7 @@ export function OrderSummary({
       {canCancel && (
         <form action={cancelOrder}>
           <input type="hidden" name="id" value={id} />
+          <input type="hidden" name="version" value={order.version} />
           <label>
             Justificativa do cancelamento
             <textarea
@@ -138,6 +140,7 @@ export function OrderSummary({
       {canReopen && (
         <form action={reopenOrder}>
           <input type="hidden" name="id" value={id} />
+          <input type="hidden" name="version" value={order.version} />
           <label>
             Justificativa da reabertura
             <textarea

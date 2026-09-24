@@ -1,4 +1,7 @@
-import { assignOrder, editOrderDetails } from "@/app/actions";
+import {
+  editOrderControlled,
+  updateOrderLinksLegacy,
+} from "@/app/actions";
 import { fieldLimits } from "@/lib/application-config";
 import { priorities } from "@/lib/domain";
 import type {
@@ -33,7 +36,7 @@ export function OrderAdministration({
           O responsável e o solicitante devem possuir vínculo ativo com a
           unidade selecionada.
         </p>
-        <form action={assignOrder} className="form-grid">
+        <form action={updateOrderLinksLegacy} className="form-grid">
           <input type="hidden" name="id" value={id} />
           <label>
             Unidade
@@ -83,8 +86,9 @@ export function OrderAdministration({
       </section>
       <section className="card">
         <h2>Editar solicitação</h2>
-        <form action={editOrderDetails} className="form-grid">
+        <form action={editOrderControlled} className="form-grid">
           <input type="hidden" name="id" value={id} />
+          <input type="hidden" name="version" value={order.version} />
           <label className="span-2">
             Título
             <input
@@ -113,6 +117,10 @@ export function OrderAdministration({
                 <option key={priority}>{priority}</option>
               ))}
             </select>
+          </label>
+          <label>
+            Justificativa da prioridade
+            <input name="priority_reason" maxLength={2000} />
           </label>
           <label>
             B.O. / REDS

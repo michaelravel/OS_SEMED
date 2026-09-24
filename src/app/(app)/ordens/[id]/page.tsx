@@ -31,7 +31,7 @@ export default async function OrderPage({
   const { data, error } = await db
     .from("os_orders")
     .select(
-      "id,protocol,title,status,priority,resolution,unit_id,opened_by,responsible_id,category_id,driver_id,vehicle_id,route_id,details,opened_at",
+      "id,protocol,version,title,status,priority,resolution,unit_id,destination_unit_id,opened_by,responsible_id,category_id,driver_id,vehicle_id,route_id,details,opened_at",
     )
     .eq("id", id)
     .maybeSingle();
