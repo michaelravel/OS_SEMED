@@ -84,6 +84,14 @@ export const orderWaitReasons = [
 ] as const;
 export type OrderWaitReason = (typeof orderWaitReasons)[number];
 
+export const orderResumeStatuses = [
+  canonicalOrderStatusNames.triage,
+  canonicalOrderStatusNames.forwarded,
+  canonicalOrderStatusNames.assigned,
+  canonicalOrderStatusNames.inService,
+] as const;
+export type OrderResumeStatus = (typeof orderResumeStatuses)[number];
+
 export const orderOperationNames = {
   open: "open",
   reconcile: "reconcile",
@@ -346,12 +354,7 @@ export const orderWaitingSchema = z.object({
     .trim()
     .min(workflowLimits.justificationMin)
     .max(workflowLimits.justificationMax),
-  resumeStatus: z.enum([
-    canonicalOrderStatusNames.triage,
-    canonicalOrderStatusNames.forwarded,
-    canonicalOrderStatusNames.assigned,
-    canonicalOrderStatusNames.inService,
-  ]),
+  resumeStatus: z.enum(orderResumeStatuses),
 });
 
 export const orderCompletionSchema = z.object({

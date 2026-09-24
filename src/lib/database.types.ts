@@ -1,5 +1,11 @@
-// Contrato do schema os_* até a migration 202609240005. Regenerar após mudanças no banco.
-import type { Catalog, Membership, Order, Unit } from "./domain";
+// Contrato do schema os_* até a migration 202609240007. Regenerar após mudanças no banco.
+import type {
+  Catalog,
+  Membership,
+  Order,
+  OrderOperation,
+  Unit,
+} from "./domain";
 type Table<Row, Required extends keyof Row = never> = {
   Row: Row;
   Insert: Partial<Row> & Pick<Row, Required>;
@@ -28,6 +34,7 @@ export type Attachment = {
   storage_verified_at: string | null;
   inspected_at: string | null;
   quarantined_at: string | null;
+  service_entry_id: number | null;
   created_at: string;
 };
 export type OrderEvent = {
@@ -37,6 +44,20 @@ export type OrderEvent = {
   from_status: string | null;
   to_status: string;
   reason: string;
+  event_type: string | null;
+  actor_membership_id: string | null;
+  metadata: Json | null;
+  operation: OrderOperation | "advance" | null;
+  created_at: string;
+};
+export type OrderServiceEntry = {
+  id: number;
+  order_id: string;
+  author_id: string | null;
+  author_membership_id: string | null;
+  entry_type: string;
+  description: string;
+  serviced_at: string;
   created_at: string;
 };
 type Audit = {
@@ -70,6 +91,10 @@ export type Database = {
         "id" | "order_id" | "name" | "path" | "mime_type" | "size_bytes"
       >;
       os_order_events: Table<OrderEvent>;
+      os_order_service_entries: Table<
+        OrderServiceEntry,
+        "order_id" | "entry_type" | "description" | "serviced_at"
+      >;
       os_audit: Table<Audit>;
       os_import_records: Table<
         { source: string; source_id: string; payload: Json },

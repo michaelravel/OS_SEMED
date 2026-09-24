@@ -11,6 +11,8 @@ import {
   workflowLimits,
   type CompatibleOrderStatus,
   type OrderPriority,
+  type OrderResumeStatus,
+  type OrderWaitReason,
 } from "./order-workflow";
 
 export * from "./order-workflow";
@@ -127,6 +129,8 @@ export function isOrderStatus(value: string): value is OrderStatus {
 export type Order = {
   id: string;
   protocol: number;
+  protocol_year: number | null;
+  protocol_code: string | null;
   legacy_id: string | null;
   title: string;
   status: OrderStatus;
@@ -134,6 +138,7 @@ export type Order = {
   status_reason: string;
   resolution: string | null;
   unit_id: string | null;
+  destination_unit_id: string | null;
   opened_by: string | null;
   responsible_id: string | null;
   category_id: string | null;
@@ -151,9 +156,19 @@ export type Order = {
   details: OrderDetails;
   created_at: string;
   opened_at: string | null;
+  triaged_at: string | null;
+  forwarded_at: string | null;
+  assigned_at: string | null;
+  service_started_at: string | null;
+  waiting_since: string | null;
+  waiting_reason: OrderWaitReason | null;
+  waiting_details: string | null;
+  resume_status: OrderResumeStatus | null;
+  priority_reason: string | null;
   completed_at: string | null;
   cancelled_at: string | null;
   reopened_at: string | null;
+  version: number;
   active: boolean;
 };
 export const orderSchema = z.object({
