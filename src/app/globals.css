@@ -507,6 +507,55 @@ td small {
 .filters button {
   margin-bottom: 0;
 }
+.order-filters {
+  margin-bottom: 24px;
+}
+.order-filter-primary,
+.order-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+.order-filters label {
+  margin: 0;
+}
+.order-filter-advanced {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid hsl(var(--border));
+}
+.order-filter-advanced summary {
+  color: hsl(var(--primary));
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+.order-filter-advanced[open] summary {
+  margin-bottom: 16px;
+}
+.order-filter-flags,
+.order-filter-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 18px;
+}
+.order-filter-flags label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.order-filter-flags input {
+  width: auto;
+  margin: 0;
+}
+.order-filter-actions a {
+  font-size: 12px;
+  font-weight: 600;
+}
 .pagination {
   display: flex;
   justify-content: space-between;
@@ -650,6 +699,10 @@ td small {
   .welcome h2 {
     font-size: 25px;
   }
+  .order-filter-primary,
+  .order-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 @media (max-width: 760px) {
   .app-shell {
@@ -737,5 +790,9 @@ td small {
   }
   .filters {
     gap: 10px;
+  }
+  .order-filter-primary,
+  .order-filter-grid {
+    grid-template-columns: 1fr;
   }
 }

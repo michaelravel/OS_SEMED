@@ -1,68 +1,68 @@
 import Link from "next/link";
+import { OrderCursorPagination } from "@/components/order-cursor-pagination";
+import {
+  OrderFilters,
+  type OrderFilterOption,
+} from "@/components/order-filters";
+import { Badge, Heading, date } from "@/components/ui";
+import { queryLimits } from "@/lib/application-config";
+import { formatOrderProtocol } from "@/lib/domain";
+import { ensureQueriesSucceeded } from "@/lib/errors";
+import {
+  encodeOrderCursor,
+  orderFilterUrlParams,
+  parseOrderSearchParams,
+  type OrderSearchParams,
+} from "@/lib/order-search";
 import { session } from "@/lib/session";
-import { isOrderStatus, orderStatuses } from "@/lib/domain";
-import { Heading, Badge, Pagination, date } from "@/components/ui";
-import { pageNumber, pageRange } from "@/lib/pagination";
-import { ensureQuerySucceeded } from "@/lib/errors";
-import { fieldLimits } from "@/lib/application-config";
+
 export default async function Orders({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; q?: string; status?: string }>;
+  searchParams: Promise<OrderSearchParams>;
 }) {
-  const p = await searchParams;
-  const page = pageNumber(p.page);
-  const range = pageRange(page);
-  const q = (p.q ?? "").slice(0, 100);
+  const parsed = parseOrderSearchParams(await searchParams);
   const { db } = await session();
-  let query = db
-    .from("os_orders")
-    .select("id,protocol,title,status,priority,created_at", { count: "exact" })
-    .eq("active", true)
-    .order("created_at", { ascending: false })
-    .range(range.from, range.to);
-  if (q) {
-    const protocol = q.match(/^(?:OS-?)?0*(\d+)$/i)?.[1];
-    query = protocol
-      ? query.eq("protocol", Number(protocol))
-      : query.ilike("title", `%${q.replace(/[%_\\]/g, "")}%`);
-  }
-  if (p.status && isOrderStatus(p.status))
-    query = query.eq("status", p.status);
-  const { data, error, count } = await query;
-  ensureQuerySucceeded({ error }, "Falha ao consultar ordens");
+  const [orders, filterOptions] = await Promise.all([
+    db.rpc("os_search_orders", {
+      ...parsed.args,
+      page_size: queryLimits.pageSize,
+    }),
+    db.rpc("os_order_filter_options"),
+  ]);
+  ensureQueriesSucceeded([orders, filterOptions], "Falha ao consultar ordens");
+
+  const rows = orders.data ?? [];
+  const first = rows[0];
+  const last = rows.at(-1);
+  const cursorHref = (
+    row: (typeof rows)[number],
+    direction: "next" | "previous",
+  ) => {
+    const params = orderFilterUrlParams(parsed.values);
+    params.set(
+      "cursor",
+      encodeOrderCursor({ createdAt: row.created_at, id: row.id }),
+    );
+    params.set("direction", direction);
+    return `/ordens?${params.toString()}`;
+  };
+
   return (
     <>
       <Heading
         title="Ordens de serviço"
         description="Consulte e acompanhe as solicitações da rede."
       />
-      <form className="filters">
-        <label>
-          Buscar
-          <input
-            name="q"
-            defaultValue={q}
-            placeholder="Título ou protocolo OS-000001"
-            maxLength={fieldLimits.search}
-          />
-        </label>
-        <label>
-          Situação
-          <select name="status" defaultValue={p.status ?? ""}>
-            <option value="">Todas</option>
-            {orderStatuses.map((s) => (
-              <option key={s}>{s}</option>
-            ))}
-          </select>
-        </label>
-        <button>Filtrar</button>
-      </form>
+      <OrderFilters
+        values={parsed.values}
+        options={(filterOptions.data ?? []) as OrderFilterOption[]}
+      />
       <section className="card table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Identificador</th>
+              <th>Protocolo</th>
               <th>Solicitação</th>
               <th>Situação</th>
               <th>Prioridade</th>
@@ -71,27 +71,35 @@ export default async function Orders({
             </tr>
           </thead>
           <tbody>
-            {data?.map((o) => (
-              <tr key={o.id}>
-                <td>OS-{String(o.protocol).padStart(6, "0")}</td>
-                <td>{o.title}</td>
+            {rows.map((order) => (
+              <tr key={order.id}>
                 <td>
-                  <Badge status={o.status} />
+                  {formatOrderProtocol(
+                    order.protocol,
+                    order.protocol_code,
+                    order.protocol_year,
+                  )}
                 </td>
-                <td>{o.priority}</td>
-                <td>{date(o.created_at)}</td>
+                <td>{order.title}</td>
                 <td>
-                  <Link href={`/ordens/${o.id}`}>Ver detalhes →</Link>
+                  <Badge status={order.status} />
+                </td>
+                <td>{order.priority}</td>
+                <td>{date(order.created_at)}</td>
+                <td>
+                  <Link href={`/ordens/${order.id}`}>Ver detalhes →</Link>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        {!data?.length && <p className="empty">Nenhuma ordem encontrada.</p>}
-        <Pagination
-          page={page}
-          total={count ?? 0}
-          base={`/ordens?q=${encodeURIComponent(q)}&status=${encodeURIComponent(p.status ?? "")}`}
+        {!rows.length && <p className="empty">Nenhuma ordem encontrada.</p>}
+        <OrderCursorPagination
+          pageSize={queryLimits.pageSize}
+          previousHref={
+            first?.has_previous ? cursorHref(first, "previous") : undefined
+          }
+          nextHref={last?.has_next ? cursorHref(last, "next") : undefined}
         />
       </section>
     </>

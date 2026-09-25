@@ -232,6 +232,51 @@ export type Database = {
           total_count: number;
         }[];
       };
+      os_order_filter_options: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          option_kind: string;
+          option_id: string;
+          option_name: string;
+        }[];
+      };
+      os_search_orders: {
+        Args: {
+          search_text: string | null;
+          target_protocol: number | null;
+          target_protocol_code: string | null;
+          target_protocol_year: number | null;
+          target_status: string | null;
+          target_priority: string | null;
+          target_category: string | null;
+          target_origin_unit: string | null;
+          target_destination_unit: string | null;
+          target_requester: string | null;
+          target_responsible: string | null;
+          opened_from: string | null;
+          opened_until: string | null;
+          completed_from: string | null;
+          completed_until: string | null;
+          only_reopened: boolean;
+          only_waiting: boolean;
+          cursor_created_at: string | null;
+          cursor_id: string | null;
+          cursor_direction: "next" | "previous";
+          page_size: number;
+        };
+        Returns: {
+          id: string;
+          protocol: number;
+          protocol_year: number | null;
+          protocol_code: string | null;
+          title: string;
+          status: string;
+          priority: string;
+          created_at: string;
+          has_previous: boolean;
+          has_next: boolean;
+        }[];
+      };
       os_assign_order: {
         Args:
           | {
