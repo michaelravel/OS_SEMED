@@ -374,11 +374,6 @@ input[type="checkbox"] {
   font-size: 12px;
   font-weight: 700;
 }
-.welcome-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 18px;
-}
 .welcome-mark {
   display: flex;
   flex-direction: column;

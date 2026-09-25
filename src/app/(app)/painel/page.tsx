@@ -7,18 +7,15 @@ import {
   CircleCheck,
   Building2,
   ArrowUpRight,
-  Plus,
 } from "lucide-react";
 import { queryLimits } from "@/lib/application-config";
 import { ensureQueriesSucceeded } from "@/lib/errors";
 import { orderStatusNames } from "@/lib/domain";
-import { getUserPermissions, requirePagePermission } from "@/lib/authorization";
+import { requirePagePermission } from "@/lib/authorization";
 import { routePermissions } from "@/lib/authorization-policy";
 export default async function Dashboard() {
   const { db } = await session();
   await requirePagePermission(routePermissions.dashboard, db);
-  const permissions = await getUserPermissions(db);
-  const canCreateOrder = permissions.has(routePermissions.newOrder);
   const [all, pending, done, units, recent] = await Promise.all([
     db
       .from("os_orders")
@@ -77,16 +74,9 @@ export default async function Dashboard() {
             Organize demandas, acompanhe as equipes e mantenha
             <br />o cuidado com nossas unidades em dia.
           </p>
-          <div className="welcome-actions">
-            <Link href="/ordens">
-              Acompanhar ordens <ArrowUpRight size={17} />
-            </Link>
-            {canCreateOrder && (
-              <Link href="/ordens/nova">
-                <Plus size={17} /> Nova OS
-              </Link>
-            )}
-          </div>
+          <Link href="/ordens">
+            Acompanhar ordens <ArrowUpRight size={17} />
+          </Link>
         </div>
         <div className="welcome-mark" aria-hidden="true">
           <Building2 size={100} strokeWidth={1} />

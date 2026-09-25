@@ -71,7 +71,7 @@ test("breadcrumb e cabeçalho representam a rota real", () => {
   );
 });
 
-test("Nova OS aparece apenas nos contextos previstos e exige permissão", async () => {
+test("Nova OS aparece somente na listagem de ordens e exige permissão", async () => {
   const [shell, dashboard, orders, newOrder, professionals, profiles] =
     await Promise.all([
       read("src/components/shell.tsx"),
@@ -83,11 +83,9 @@ test("Nova OS aparece apenas nos contextos previstos e exige permissão", async 
     ]);
 
   assert.doesNotMatch(shell, /href="\/ordens\/nova"/);
-  for (const source of [dashboard, orders]) {
-    assert.match(source, /permissions\.has\(routePermissions\.newOrder\)/);
-    assert.match(source, /href="\/ordens\/nova"/);
-  }
-  for (const source of [newOrder, professionals, profiles])
+  assert.match(orders, /permissions\.has\(routePermissions\.newOrder\)/);
+  assert.match(orders, /href="\/ordens\/nova"/);
+  for (const source of [dashboard, newOrder, professionals, profiles])
     assert.doesNotMatch(source, /href="\/ordens\/nova"/);
 });
 
