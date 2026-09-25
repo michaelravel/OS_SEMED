@@ -11,8 +11,11 @@ import {
 import { queryLimits } from "@/lib/application-config";
 import { ensureQueriesSucceeded } from "@/lib/errors";
 import { orderStatusNames } from "@/lib/domain";
+import { requirePagePermission } from "@/lib/authorization";
+import { routePermissions } from "@/lib/authorization-policy";
 export default async function Dashboard() {
   const { db } = await session();
+  await requirePagePermission(routePermissions.dashboard, db);
   const [all, pending, done, units, recent] = await Promise.all([
     db
       .from("os_orders")

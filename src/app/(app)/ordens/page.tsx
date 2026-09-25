@@ -15,6 +15,8 @@ import {
   type OrderSearchParams,
 } from "@/lib/order-search";
 import { session } from "@/lib/session";
+import { requirePagePermission } from "@/lib/authorization";
+import { routePermissions } from "@/lib/authorization-policy";
 
 export default async function Orders({
   searchParams,
@@ -23,6 +25,7 @@ export default async function Orders({
 }) {
   const parsed = parseOrderSearchParams(await searchParams);
   const { db } = await session();
+  await requirePagePermission(routePermissions.orders, db);
   const [orders, filterOptions] = await Promise.all([
     db.rpc("os_search_orders", {
       ...parsed.args,

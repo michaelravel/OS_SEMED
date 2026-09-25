@@ -14,7 +14,7 @@ export const session = cache(async () => {
   if (error || !user) redirect("/login");
   const { data, error: membershipError } = await db
     .from("os_memberships")
-    .select("id,user_id,unit_id,role,active")
+    .select("id,user_id,professional_id,access_profile_id,unit_id,role,active")
     .eq("user_id", user.id)
     .eq("active", true);
   if (membershipError)

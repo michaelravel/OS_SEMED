@@ -5,12 +5,15 @@ import { Heading, Notice } from "@/components/ui";
 import { OrderForm } from "@/components/order-form";
 import { queryLimits } from "@/lib/application-config";
 import { ensureQueriesSucceeded } from "@/lib/errors";
+import { requirePagePermission } from "@/lib/authorization";
+import { routePermissions } from "@/lib/authorization-policy";
 export default async function NewOrder({
   searchParams,
 }: {
   searchParams: Promise<{ erro?: string }>;
 }) {
   const { db, memberships } = await session();
+  await requirePagePermission(routePermissions.newOrder, db);
   if (!canOpen(memberships)) redirect("/ordens");
   const [{ data: units, error: uError }, { data: catalogs, error: cError }] =
     await Promise.all([

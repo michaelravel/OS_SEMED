@@ -71,6 +71,7 @@ export type Membership = {
   id: string;
   user_id: string | null;
   professional_id: string;
+  access_profile_id: string;
   unit_id: string | null;
   role: Role;
   active: boolean;

@@ -1,4 +1,4 @@
-// Contrato do schema os_* até a migration 202609240008. Regenerar após mudanças no banco.
+// Contrato do schema os_* até a migration 202609250004. Regenerar após mudanças no banco.
 import type {
   Catalog,
   Membership,
@@ -14,6 +14,30 @@ type Table<Row, Required extends keyof Row = never> = {
   Relationships: [];
 };
 export type Profile = { id: string; name: string };
+export type AccessProfile = {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+  active: boolean;
+  is_system: boolean;
+  legacy_role: string;
+  created_at: string;
+  updated_at: string;
+};
+export type Permission = {
+  id: string;
+  key: string;
+  module: string;
+  action: string;
+  description: string;
+  created_at: string;
+};
+export type AccessProfilePermission = {
+  access_profile_id: string;
+  permission_id: string;
+  created_at: string;
+};
 export type Professional = {
   id: string;
   institutional_email: string | null;
@@ -97,6 +121,12 @@ export type Database = {
     Tables: {
       os_units: Table<Unit & { legacy_id: string | null }, "name">;
       os_profiles: Table<Profile, "id" | "name">;
+      os_access_profiles: Table<AccessProfile, "key" | "name" | "legacy_role">;
+      os_permissions: Table<Permission, "key" | "module" | "action" | "description">;
+      os_access_profile_permissions: Table<
+        AccessProfilePermission,
+        "access_profile_id" | "permission_id"
+      >;
       os_professionals: Table<Professional, "name">;
       os_memberships: Table<Membership, "role">;
       os_catalogs: Table<Catalog, "legacy_id" | "kind" | "name">;
@@ -128,6 +158,32 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      os_has_permission: {
+        Args: { permission_key: string };
+        Returns: boolean;
+      };
+      os_current_permissions: {
+        Args: Record<string, never>;
+        Returns: { permission_key: string }[];
+      };
+      os_save_access_profile: {
+        Args: {
+          target: string | null;
+          profile_name: string;
+          profile_description: string;
+          profile_active: boolean;
+          profile_legacy_role: string;
+        };
+        Returns: string;
+      };
+      os_set_access_profile_permissions: {
+        Args: { target: string; permission_keys: string[] };
+        Returns: undefined;
+      };
+      os_delete_access_profile: {
+        Args: { target: string };
+        Returns: undefined;
+      };
       os_open_order: {
         Args: {
           order_title: string;
@@ -435,6 +491,10 @@ export type Database = {
           membership_active: boolean;
         };
         Returns: string;
+      };
+      os_deactivate_professional_membership: {
+        Args: { target_membership: string };
+        Returns: undefined;
       };
       os_prepare_professional_identity_change: {
         Args: { target_professional: string; new_email: string; justification: string };

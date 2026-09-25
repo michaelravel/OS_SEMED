@@ -23,8 +23,13 @@ import {
   actionFailed,
   formText,
   orderActionFailed,
+  requireActionPermission,
   requireAdministrator,
 } from "./shared";
+import {
+  legacyStatusPermission,
+  orderActionPermissions,
+} from "@/lib/authorization-policy";
 
 function refreshOrder(id: string) {
   revalidatePath(`/ordens/${id}`);
@@ -43,6 +48,12 @@ function invalidOrderAction(form: FormData, operation: string) {
 
 export async function createOrder(form: FormData) {
   const { db } = await session();
+  await requireActionPermission(
+    db,
+    orderActionPermissions.CREATE,
+    "/ordens/nova",
+    "CREATE",
+  );
   const input = orderSchema.safeParse(Object.fromEntries(form));
   if (!input.success) return actionFailed("/ordens/nova");
   const {
@@ -84,6 +95,7 @@ export async function reconcileOrder(form: FormData) {
   const input = orderReconciliationSchema.safeParse(Object.fromEntries(form));
   if (!input.success) return invalidOrderAction(form, "RECONCILE");
   const { db } = await session();
+  await requireActionPermission(db, orderActionPermissions.RECONCILE, `/ordens/${input.data.id}`, "RECONCILE");
   const { id, version, unit_id, opened_by, category_id } = input.data;
   const { error } = await db.rpc("os_reconcile_order", {
     target: id,
@@ -101,6 +113,7 @@ export async function startTriage(form: FormData) {
   const input = orderVersionedSchema.safeParse(Object.fromEntries(form));
   if (!input.success) return invalidOrderAction(form, "TRIAGE");
   const { db } = await session();
+  await requireActionPermission(db, orderActionPermissions.TRIAGE, `/ordens/${input.data.id}`, "TRIAGE");
   const { id, version } = input.data;
   const { error } = await db.rpc("os_start_triage", {
     target: id,
@@ -114,6 +127,7 @@ export async function forwardOrder(form: FormData) {
   const input = orderForwardSchema.safeParse(Object.fromEntries(form));
   if (!input.success) return invalidOrderAction(form, "FORWARD");
   const { db } = await session();
+  await requireActionPermission(db, orderActionPermissions.FORWARD, `/ordens/${input.data.id}`, "FORWARD");
   const { id, version, destination_unit_id } = input.data;
   const { error } = await db.rpc("os_forward_order", {
     target: id,
@@ -128,6 +142,7 @@ export async function assignOrder(form: FormData) {
   const input = orderAssignmentSchema.safeParse(Object.fromEntries(form));
   if (!input.success) return invalidOrderAction(form, "ASSIGN");
   const { db } = await session();
+  await requireActionPermission(db, orderActionPermissions.ASSIGN, `/ordens/${input.data.id}`, "ASSIGN");
   const { id, version, responsible_membership_id } = input.data;
   const { error } = await db.rpc("os_assign_order", {
     target: id,
@@ -142,6 +157,7 @@ export async function reassignOrder(form: FormData) {
   const input = orderReassignmentSchema.safeParse(Object.fromEntries(form));
   if (!input.success) return invalidOrderAction(form, "REASSIGN");
   const { db } = await session();
+  await requireActionPermission(db, orderActionPermissions.REASSIGN, `/ordens/${input.data.id}`, "REASSIGN");
   const { id, version, responsible_membership_id, justification } = input.data;
   const { error } = await db.rpc("os_reassign_order", {
     target: id,
@@ -157,6 +173,7 @@ export async function startService(form: FormData) {
   const input = orderVersionedSchema.safeParse(Object.fromEntries(form));
   if (!input.success) return invalidOrderAction(form, "START_SERVICE");
   const { db } = await session();
+  await requireActionPermission(db, orderActionPermissions.START_SERVICE, `/ordens/${input.data.id}`, "START_SERVICE");
   const { id, version } = input.data;
   const { error } = await db.rpc("os_start_service", {
     target: id,
@@ -171,6 +188,7 @@ export async function addServiceEntry(form: FormData) {
   const input = orderServiceEntrySchema.safeParse(Object.fromEntries(form));
   if (!input.success) return invalidOrderAction(form, "ADD_SERVICE_ENTRY");
   const { db } = await session();
+  await requireActionPermission(db, orderActionPermissions.ADD_SERVICE_ENTRY, `/ordens/${input.data.id}`, "ADD_SERVICE_ENTRY");
   const { id, version, entry_type, description, serviced_at } = input.data;
   const { error } = await db.rpc("os_add_service_entry", {
     target: id,
@@ -188,6 +206,12 @@ export async function waitForInformation(form: FormData) {
   const input = orderWaitingSchema.safeParse(Object.fromEntries(form));
   if (!input.success) return invalidOrderAction(form, "WAIT_INFORMATION");
   const { db } = await session();
+  await requireActionPermission(
+    db,
+    orderActionPermissions.WAIT_INFORMATION,
+    `/ordens/${input.data.id}`,
+    "WAIT_INFORMATION",
+  );
   const { id, version, waitingReason, justification } = input.data;
   const { error } = await db.rpc("os_wait_for_information", {
     target: id,
@@ -204,6 +228,7 @@ export async function resumeService(form: FormData) {
   const input = orderVersionedSchema.safeParse(Object.fromEntries(form));
   if (!input.success) return invalidOrderAction(form, "RESUME");
   const { db } = await session();
+  await requireActionPermission(db, orderActionPermissions.RESUME, `/ordens/${input.data.id}`, "RESUME");
   const { id, version } = input.data;
   const { error } = await db.rpc("os_resume_service", {
     target: id,
@@ -218,6 +243,8 @@ export async function changeStatus(form: FormData) {
   const input = advanceOrderSchema.safeParse(Object.fromEntries(form));
   if (!input.success) return actionFailed("/ordens");
   const { id, status, reason } = input.data;
+  const permission = legacyStatusPermission(status);
+  await requireActionPermission(db, permission, `/ordens/${id}`, "CHANGE_STATUS_LEGACY");
   const { error } = await db.rpc("os_change_status", {
     target: id,
     next_status: status,
@@ -231,6 +258,7 @@ export async function completeOrder(form: FormData) {
   const input = completeOrderSchema.safeParse(Object.fromEntries(form));
   if (!input.success) return invalidOrderAction(form, "COMPLETE");
   const { db } = await session();
+  await requireActionPermission(db, orderActionPermissions.COMPLETE, `/ordens/${input.data.id}`, "COMPLETE");
   const { id, version, solution } = input.data;
   const { error } = await db.rpc("os_complete_order", {
     target: id,
@@ -245,6 +273,7 @@ export async function cancelOrder(form: FormData) {
   const input = justifyOrderSchema.safeParse(Object.fromEntries(form));
   if (!input.success) return invalidOrderAction(form, "CANCEL");
   const { db } = await session();
+  await requireActionPermission(db, orderActionPermissions.CANCEL, `/ordens/${input.data.id}`, "CANCEL");
   const { id, version, justification } = input.data;
   const { error } = await db.rpc("os_cancel_order", {
     target: id,
@@ -259,6 +288,7 @@ export async function reopenOrder(form: FormData) {
   const input = justifyOrderSchema.safeParse(Object.fromEntries(form));
   if (!input.success) return invalidOrderAction(form, "REOPEN");
   const { db } = await session();
+  await requireActionPermission(db, orderActionPermissions.REOPEN, `/ordens/${input.data.id}`, "REOPEN");
   const { id, version, justification } = input.data;
   const { error } = await db.rpc("os_reopen_order", {
     target: id,
@@ -272,6 +302,7 @@ export async function reopenOrder(form: FormData) {
 export async function editOrderDetails(form: FormData) {
   const { db, admin } = await session();
   requireAdministrator(admin);
+  await requireActionPermission(db, orderActionPermissions.EDIT, orderPath(form), "EDIT_LEGACY");
   const id = z.uuid().parse(formText(form, "id"));
   const input = z
     .object({
@@ -313,6 +344,7 @@ export async function editOrderControlled(form: FormData) {
     .safeParse(Object.fromEntries(form));
   if (!input.success) return invalidOrderAction(form, "EDIT");
   const { db } = await session();
+  await requireActionPermission(db, orderActionPermissions.EDIT, `/ordens/${input.data.id}`, "EDIT");
   const { id, version, title, priority, priority_reason, ...details } =
     input.data;
   const { data: previous, error: readError } = await db
@@ -339,6 +371,8 @@ export async function editOrderControlled(form: FormData) {
 export async function updateOrderLinksLegacy(form: FormData) {
   const { db, admin } = await session();
   requireAdministrator(admin);
+  await requireActionPermission(db, orderActionPermissions.EDIT, orderPath(form), "UPDATE_LINKS_LEGACY");
+  await requireActionPermission(db, orderActionPermissions.ASSIGN, orderPath(form), "UPDATE_LINKS_LEGACY");
   const id = z.uuid().parse(formText(form, "id"));
   const unit = z.uuid().parse(formText(form, "unit_id"));
   const responsible = formText(form, "responsible_id");
@@ -374,6 +408,7 @@ export async function updateOrderLinksLegacy(form: FormData) {
 export async function addMessage(form: FormData) {
   const { db, user } = await session();
   const id = z.uuid().parse(formText(form, "id"));
+  await requireActionPermission(db, orderActionPermissions.ADD_MESSAGE, `/ordens/${id}`, "ADD_MESSAGE");
   const body = z
     .string()
     .trim()

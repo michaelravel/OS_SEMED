@@ -8,6 +8,9 @@ import { pageNumber, pageRange } from "@/lib/pagination";
 import { ensureQuerySucceeded } from "@/lib/errors";
 import { fieldLimits } from "@/lib/application-config";
 import { saveCatalog } from "@/app/actions";
+import { getUserPermissions, requirePagePermission } from "@/lib/authorization";
+import { permissionSetHas } from "@/lib/authorization-core";
+import { catalogPermission } from "@/lib/authorization-policy";
 export default async function CatalogPage({
   params,
   searchParams,
@@ -27,6 +30,12 @@ export default async function CatalogPage({
   const page = pageNumber(p.page);
   const range = pageRange(page);
   const { db, admin } = await session();
+  await requirePagePermission(catalogPermission(kind, "view"), db);
+  const permissions = await getUserPermissions(db);
+  const canCreate =
+    admin && permissionSetHas(permissions, catalogPermission(kind, "create"));
+  const canUpdate =
+    admin && permissionSetHas(permissions, catalogPermission(kind, "update"));
   const q = (p.q ?? "").slice(0, 100);
   let query = db
     .from("os_catalogs")
@@ -38,7 +47,7 @@ export default async function CatalogPage({
   const { data, error, count } = await query;
   ensureQuerySucceeded({ error }, "Falha ao consultar cadastros");
   const edit =
-    admin && p.edit && z.uuid().safeParse(p.edit).success
+    canUpdate && p.edit && z.uuid().safeParse(p.edit).success
       ? await db
           .from("os_catalogs")
           .select("id,legacy_id,kind,name,data,active")
@@ -71,7 +80,7 @@ export default async function CatalogPage({
                 <th key={key}>{label}</th>
               ))}
               <th>Situação</th>
-              {admin && <th>Ação</th>}
+              {canUpdate && <th>Ação</th>}
             </tr>
           </thead>
           <tbody>
@@ -82,7 +91,7 @@ export default async function CatalogPage({
                   <td key={key}>{c.data[key] ?? ""}</td>
                 ))}
                 <td>{c.active ? "Ativo" : "Inativo"}</td>
-                {admin && (
+                {canUpdate && (
                   <td>
                     <Link href={`/cadastros/${kind}?edit=${c.id}`}>Editar</Link>
                   </td>
@@ -97,7 +106,7 @@ export default async function CatalogPage({
           base={`/cadastros/${kind}?q=${encodeURIComponent(q)}`}
         />
       </section>
-      {admin && (
+      {(item ? canUpdate : canCreate) && (
         <section className="card">
           <h2>{item ? "Editar registro" : "Novo registro"}</h2>
           <form

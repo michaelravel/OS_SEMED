@@ -23,6 +23,7 @@ export {
 } from "./actions/orders";
 export { uploadAttachment } from "./actions/attachments";
 export {
+  deactivateProfessionalMembership,
   prepareProfessionalIdentityChange,
   restoreProfessionalIdentity,
   saveCatalog,
@@ -30,3 +31,8 @@ export {
   saveProfessionalMembership,
   saveUnit,
 } from "./actions/administration";
+export {
+  deleteAccessProfile,
+  saveAccessProfile,
+  saveAccessProfilePermissions,
+} from "./actions/access-profiles";

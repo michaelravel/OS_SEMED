@@ -15,30 +15,46 @@ import {
   Menu,
   Plus,
   ShieldCheck,
+  KeyRound,
 } from "lucide-react";
 import { logout } from "@/app/actions";
-const links = [
-  ["/painel", "Visão geral", LayoutDashboard],
-  ["/ordens", "Ordens de serviço", ClipboardList],
-  ["/unidades", "Unidades", Building2],
-  ["/cadastros/logistics", "Logística", Layers],
-  ["/cadastros/routes", "Rotas", Route],
-  ["/cadastros/vehicles", "Veículos", Bus],
-  ["/cadastros/drivers", "Motoristas", Users],
-] as const;
+import type { PermissionKey } from "@/lib/authorization-core";
+import { visibleNavigationItems } from "@/lib/navigation";
+
+const icons = {
+  dashboard: LayoutDashboard,
+  orders: ClipboardList,
+  units: Building2,
+  logistics: Layers,
+  routes: Route,
+  vehicles: Bus,
+  drivers: Users,
+  professionals: Settings,
+  audit: ShieldCheck,
+  access_profiles: KeyRound,
+} as const;
+
 export function Shell({
   children,
   name,
   admin,
   canCreate,
+  permissions,
 }: {
   children: React.ReactNode;
   name: string;
   admin: boolean;
   canCreate: boolean;
+  permissions: PermissionKey[];
 }) {
   const path = usePathname();
   const [open, setOpen] = useState(false);
+  const visible = visibleNavigationItems(new Set(permissions), admin);
+  const mainLinks = visible.filter((item) => item.section === "main");
+  const administrationLinks = visible.filter(
+    (item) => item.section === "administration",
+  );
+  const homeHref = mainLinks[0]?.href ?? "/sem-acesso";
   return (
     <div className="app-shell">
       <a className="skip" href="#conteudo">
@@ -48,7 +64,7 @@ export function Shell({
         className={`sidebar ${open ? "expanded" : ""}`}
         id="menu-principal"
       >
-        <Link className="brand" href="/painel">
+        <Link className="brand" href={homeHref}>
           SIGMA <b>SEMED</b>
         </Link>
         <p className="brand-description">
@@ -59,37 +75,38 @@ export function Shell({
           OS SEMED <span>ORDENS DE SERVIÇO</span>
         </div>
         <nav aria-label="Menu principal">
-          {links.map(([href, label, Icon]) => (
+          {mainLinks.map((item) => {
+            const Icon = icons[item.id];
+            return (
             <Link
-              key={href}
-              href={href}
+              key={item.href}
+              href={item.href}
               onClick={() => setOpen(false)}
-              aria-current={path === href ? "page" : undefined}
-              className={path.startsWith(href) ? "selected" : ""}
+              aria-current={path === item.href ? "page" : undefined}
+              className={path.startsWith(item.href) ? "selected" : ""}
             >
               <Icon size={18} />
-              {label}
+              {item.label}
             </Link>
-          ))}
-          {admin && (
+            );
+          })}
+          {administrationLinks.length > 0 && (
             <>
               <p className="nav-label">ADMINISTRAÇÃO</p>
-              <Link
-                href="/usuarios"
-                onClick={() => setOpen(false)}
-                className={path === "/usuarios" ? "selected" : ""}
-              >
-                <Settings size={18} />
-                Usuários e vínculos
-              </Link>
-              <Link
-                href="/auditoria"
-                onClick={() => setOpen(false)}
-                className={path === "/auditoria" ? "selected" : ""}
-              >
-                <ShieldCheck size={18} />
-                Auditoria
-              </Link>
+              {administrationLinks.map((item) => {
+                const Icon = icons[item.id];
+                return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setOpen(false)}
+                  className={path === item.href ? "selected" : ""}
+                >
+                  <Icon size={18} />
+                  {item.label}
+                </Link>
+                );
+              })}
             </>
           )}
         </nav>

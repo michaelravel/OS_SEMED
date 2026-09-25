@@ -10,7 +10,16 @@ import {
   type CatalogData,
 } from "@/lib/domain";
 import { session } from "@/lib/session";
-import { actionFailed, formText, requireAdministrator } from "./shared";
+import {
+  actionFailed,
+  formText,
+  requireActionPermission,
+  requireAdministrator,
+} from "./shared";
+import {
+  administrationActionPermissions,
+  catalogPermission,
+} from "@/lib/authorization-policy";
 import {
   allowedGoogleDomains,
   isAllowedGoogleEmail,
@@ -26,6 +35,12 @@ export async function saveCatalog(form: FormData) {
   const catalogKind = kind as keyof typeof catalogFields;
   const id = formText(form, "id");
   if (id) z.uuid().parse(id);
+  await requireActionPermission(
+    db,
+    catalogPermission(catalogKind, id ? "update" : "create"),
+    `/cadastros/${catalogKind}`,
+    "save_catalog",
+  );
   const name = z.string().trim().min(1).max(fieldLimits.catalogName).parse(formText(form, "name"));
   const data: CatalogData = {};
   for (const [key] of catalogFields[catalogKind].fields)
@@ -51,6 +66,14 @@ export async function saveUnit(form: FormData) {
   requireAdministrator(admin);
   const id = formText(form, "id");
   if (id) z.uuid().parse(id);
+  await requireActionPermission(
+    db,
+    id
+      ? administrationActionPermissions.UPDATE_UNIT
+      : administrationActionPermissions.CREATE_UNIT,
+    "/unidades",
+    "save_unit",
+  );
   const input = z.object({
     name: z.string().trim().min(1).max(fieldLimits.unitName),
     type: z.string().max(fieldLimits.unitType),
@@ -73,6 +96,12 @@ export async function saveUnit(form: FormData) {
 export async function saveMembership(form: FormData) {
   const { db, admin, user } = await session();
   requireAdministrator(admin);
+  await requireActionPermission(
+    db,
+    administrationActionPermissions.MANAGE_PROFESSIONAL,
+    "/usuarios",
+    "save_membership_legacy",
+  );
   const userId = z.uuid().parse(formText(form, "user_id"));
   const role = z.enum(roles).parse(formText(form, "role"));
   const unit = formText(form, "unit_id");
@@ -135,6 +164,37 @@ export async function saveProfessionalMembership(form: FormData) {
     !isAllowedGoogleEmail(input.data.email, allowedGoogleDomains())
   ) return actionFailed("/usuarios", "validation", "save_professional_domain");
 
+  const currentMembership = input.data.id
+    ? await db
+        .from("os_memberships")
+        .select("role")
+        .eq("id", input.data.id)
+        .maybeSingle()
+    : null;
+  if (currentMembership?.error)
+    return actionFailed("/usuarios", "unexpected", "load_professional");
+
+  await requireActionPermission(
+    db,
+    !form.has("professional_active") || !form.has("membership_active")
+      ? administrationActionPermissions.DELETE_PROFESSIONAL
+      : input.data.professional_id
+        ? administrationActionPermissions.UPDATE_PROFESSIONAL
+        : administrationActionPermissions.CREATE_PROFESSIONAL,
+    "/usuarios",
+    "save_professional",
+  );
+  if (
+    input.data.role === roleNames.administrator ||
+    currentMembership?.data?.role === roleNames.administrator
+  )
+    await requireActionPermission(
+      db,
+      administrationActionPermissions.MANAGE_PROFESSIONAL,
+      "/usuarios",
+      "assign_administrator",
+    );
+
   const { error } = await db.rpc("os_save_professional_membership", {
     target_membership: input.data.id || null,
     target_professional: input.data.professional_id || null,
@@ -152,9 +212,44 @@ export async function saveProfessionalMembership(form: FormData) {
   redirect("/usuarios");
 }
 
+export async function deactivateProfessionalMembership(form: FormData) {
+  const { db, admin } = await session();
+  requireAdministrator(admin);
+  const membershipId = z.uuid().safeParse(formText(form, "membership_id"));
+  if (!membershipId.success)
+    return actionFailed(
+      "/usuarios",
+      "validation",
+      "deactivate_professional_membership",
+    );
+  await requireActionPermission(
+    db,
+    administrationActionPermissions.DELETE_PROFESSIONAL,
+    "/usuarios",
+    "deactivate_professional_membership",
+  );
+  const { error } = await db.rpc("os_deactivate_professional_membership", {
+    target_membership: membershipId.data,
+  });
+  if (error)
+    return actionFailed(
+      "/usuarios",
+      error.code === "42501" ? "forbidden" : "business_rule",
+      "deactivate_professional_membership",
+    );
+  revalidatePath("/usuarios");
+  redirect("/usuarios");
+}
+
 export async function prepareProfessionalIdentityChange(form: FormData) {
   const { db, admin } = await session();
   requireAdministrator(admin);
+  await requireActionPermission(
+    db,
+    administrationActionPermissions.MANAGE_PROFESSIONAL,
+    "/usuarios",
+    "change_professional_identity",
+  );
   const input = z.object({
     professional_id: z.uuid(),
     new_email: z.email().max(fieldLimits.email).transform(normalizeInstitutionalEmail),
@@ -175,6 +270,12 @@ export async function prepareProfessionalIdentityChange(form: FormData) {
 export async function restoreProfessionalIdentity(form: FormData) {
   const { db, admin } = await session();
   requireAdministrator(admin);
+  await requireActionPermission(
+    db,
+    administrationActionPermissions.MANAGE_PROFESSIONAL,
+    "/usuarios",
+    "restore_professional_identity",
+  );
   const input = z.object({
     professional_id: z.uuid(),
     justification: z.string().trim().min(10).max(500),

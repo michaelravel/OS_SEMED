@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { session } from "@/lib/session";
 import { attachmentBucket } from "@/lib/attachments";
+import { hasPermission } from "@/lib/authorization";
+import { routePermissions } from "@/lib/authorization-policy";
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -10,6 +12,8 @@ export async function GET(
   if (!z.uuid().safeParse(id).success)
     return new NextResponse("Não encontrado", { status: 404 });
   const { db } = await session();
+  if (!(await hasPermission(routePermissions.orders, db)))
+    return new NextResponse("Acesso negado", { status: 403 });
   const { data, error } = await db
     .from("os_attachments")
     .select("path,name")

@@ -3,13 +3,16 @@ import { session } from "@/lib/session";
 import { Heading, Pagination, date } from "@/components/ui";
 import { pageNumber, pageRange } from "@/lib/pagination";
 import { ensureQuerySucceeded } from "@/lib/errors";
+import { requirePagePermission } from "@/lib/authorization";
+import { routePermissions } from "@/lib/authorization-policy";
 export default async function Audit({
   searchParams,
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
   const { db, admin } = await session();
-  if (!admin) redirect("/painel");
+  if (!admin) redirect("/sem-acesso");
+  await requirePagePermission(routePermissions.audit, db);
   const page = pageNumber((await searchParams).page);
   const range = pageRange(page);
   const { data, error, count } = await db

@@ -20,6 +20,8 @@ import type {
   OrderDetail,
   ResponsibleMembershipOption,
 } from "@/components/order-details/types";
+import { requirePagePermission } from "@/lib/authorization";
+import { routePermissions } from "@/lib/authorization-policy";
 
 export default async function OrderPage({
   params,
@@ -35,6 +37,7 @@ export default async function OrderPage({
   const timelineRange = pageRange(timelinePage);
 
   const { db, admin, user } = await session();
+  await requirePagePermission(routePermissions.orders, db);
   const { data, error } = await db
     .from("os_orders")
     .select(

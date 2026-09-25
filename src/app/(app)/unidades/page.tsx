@@ -6,6 +6,12 @@ import { ensureQuerySucceeded } from "@/lib/errors";
 import { fieldLimits } from "@/lib/application-config";
 import { saveUnit } from "@/app/actions";
 import { z } from "zod";
+import { getUserPermissions, requirePagePermission } from "@/lib/authorization";
+import { permissionSetHas } from "@/lib/authorization-core";
+import {
+  administrationActionPermissions,
+  routePermissions,
+} from "@/lib/authorization-policy";
 export default async function Units({
   searchParams,
 }: {
@@ -20,6 +26,20 @@ export default async function Units({
   const page = pageNumber(p.page);
   const range = pageRange(page);
   const { db, admin } = await session();
+  await requirePagePermission(routePermissions.units, db);
+  const permissions = await getUserPermissions(db);
+  const canCreate =
+    admin &&
+    permissionSetHas(
+      permissions,
+      administrationActionPermissions.CREATE_UNIT,
+    );
+  const canUpdate =
+    admin &&
+    permissionSetHas(
+      permissions,
+      administrationActionPermissions.UPDATE_UNIT,
+    );
   const q = (p.q ?? "").slice(0, 100);
   let query = db
     .from("os_units")
@@ -30,7 +50,7 @@ export default async function Units({
   const { data, error, count } = await query;
   ensureQuerySucceeded({ error }, "Falha ao consultar unidades");
   const edit =
-    admin && p.edit && z.uuid().safeParse(p.edit).success
+    canUpdate && p.edit && z.uuid().safeParse(p.edit).success
       ? await db
           .from("os_units")
           .select("id,name,type,address,coordinates,active")
@@ -61,7 +81,7 @@ export default async function Units({
               <th>Tipo</th>
               <th>Endereço</th>
               <th>Situação</th>
-              {admin && <th>Ação</th>}
+              {canUpdate && <th>Ação</th>}
             </tr>
           </thead>
           <tbody>
@@ -71,7 +91,7 @@ export default async function Units({
                 <td>{u.type}</td>
                 <td>{u.address}</td>
                 <td>{u.active ? "Ativa" : "Inativa"}</td>
-                {admin && (
+                {canUpdate && (
                   <td>
                     <Link href={`/unidades?edit=${u.id}`}>Editar</Link>
                   </td>
@@ -86,7 +106,7 @@ export default async function Units({
           base={`/unidades?q=${encodeURIComponent(q)}`}
         />
       </section>
-      {admin && (
+      {(item ? canUpdate : canCreate) && (
         <section className="card">
           <h2>{item ? "Editar unidade" : "Nova unidade"}</h2>
           <form key={item?.id ?? "new"} action={saveUnit} className="form-grid">

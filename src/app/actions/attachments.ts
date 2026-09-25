@@ -10,11 +10,18 @@ import {
   attachmentSha256,
   normalizeAttachmentName,
 } from "@/lib/attachments";
-import { actionFailed, formText } from "./shared";
+import { actionFailed, formText, requireActionPermission } from "./shared";
+import { orderActionPermissions } from "@/lib/authorization-policy";
 
 export async function uploadAttachment(form: FormData) {
   const { db } = await session();
   const orderId = z.uuid().parse(formText(form, "id"));
+  await requireActionPermission(
+    db,
+    orderActionPermissions.UPLOAD_ATTACHMENT,
+    `/ordens/${orderId}`,
+    "UPLOAD_ATTACHMENT",
+  );
   const file = form.get("file");
   const { data: policies, error: policyError } = await db.rpc("os_attachment_policy");
   const policy = policies?.[0];

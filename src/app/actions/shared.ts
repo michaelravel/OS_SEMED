@@ -6,6 +6,12 @@ import {
   classifyOrderRpcError,
   type ActionErrorCode,
 } from "@/lib/action-result";
+import {
+  PermissionDeniedError,
+  requirePermission,
+  type AuthorizationClient,
+} from "@/lib/authorization";
+import type { PermissionKey } from "@/lib/authorization-core";
 
 export function formText(form: FormData, key: string) {
   return String(form.get(key) ?? "");
@@ -37,4 +43,21 @@ export function orderActionFailed(
 
 export function requireAdministrator(admin: boolean): asserts admin {
   if (!admin) throw new Error("Acesso negado");
+}
+
+export async function requireActionPermission(
+  db: AuthorizationClient,
+  permission: PermissionKey,
+  path: string,
+  operation: string,
+) {
+  try {
+    await requirePermission(permission, db);
+  } catch (error) {
+    return actionFailed(
+      path,
+      error instanceof PermissionDeniedError ? "forbidden" : "unexpected",
+      operation,
+    );
+  }
 }
