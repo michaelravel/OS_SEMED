@@ -69,7 +69,8 @@ export const roles = [
 export type Role = (typeof roles)[number];
 export type Membership = {
   id: string;
-  user_id: string;
+  user_id: string | null;
+  professional_id: string;
   unit_id: string | null;
   role: Role;
   active: boolean;

@@ -14,6 +14,20 @@ type Table<Row, Required extends keyof Row = never> = {
   Relationships: [];
 };
 export type Profile = { id: string; name: string };
+export type Professional = {
+  id: string;
+  institutional_email: string | null;
+  name: string;
+  registration: string;
+  job_title: string;
+  active: boolean;
+  auth_user_id: string | null;
+  previous_auth_user_id: string | null;
+  identity_linked_at: string | null;
+  identity_unlinked_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
 export type Message = {
   id: string;
   order_id: string;
@@ -83,7 +97,8 @@ export type Database = {
     Tables: {
       os_units: Table<Unit & { legacy_id: string | null }, "name">;
       os_profiles: Table<Profile, "id" | "name">;
-      os_memberships: Table<Membership, "user_id" | "role">;
+      os_professionals: Table<Professional, "name">;
+      os_memberships: Table<Membership, "role">;
       os_catalogs: Table<Catalog, "legacy_id" | "kind" | "name">;
       os_orders: Table<Order & { updated_at: string }, "title">;
       os_messages: Table<Message, "order_id" | "body">;
@@ -97,6 +112,15 @@ export type Database = {
         "order_id" | "entry_type" | "description" | "serviced_at"
       >;
       os_audit: Table<Audit>;
+      os_identity_events: Table<{
+        id: number;
+        professional_id: string | null;
+        actor_auth_user_id: string | null;
+        event_type: string;
+        email_domain: string | null;
+        metadata: Json;
+        created_at: string;
+      }>;
       os_import_records: Table<
         { source: string; source_id: string; payload: Json },
         "source" | "source_id" | "payload"
@@ -365,6 +389,59 @@ export type Database = {
           target_active: boolean;
           target_name: string;
         };
+        Returns: undefined;
+      };
+      os_claim_professional_identity: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          result: string;
+          professional_id: string | null;
+          active_memberships: number;
+        }[];
+      };
+      os_record_identity_denial: {
+        Args: { denial_type: string; denied_domain: string };
+        Returns: undefined;
+      };
+      os_professional_memberships: {
+        Args: { page_size?: number; page_offset?: number };
+        Returns: {
+          membership_id: string | null;
+          professional_id: string;
+          professional_name: string;
+          institutional_email: string | null;
+          registration: string;
+          job_title: string;
+          professional_active: boolean;
+          identity_linked: boolean;
+          relink_pending: boolean;
+          unit_id: string | null;
+          role: string | null;
+          membership_active: boolean | null;
+          total_count: number;
+        }[];
+      };
+      os_save_professional_membership: {
+        Args: {
+          target_membership: string | null;
+          target_professional: string | null;
+          professional_email: string;
+          professional_name: string;
+          professional_registration: string;
+          professional_position: string;
+          target_unit: string | null;
+          target_role: string;
+          professional_active: boolean;
+          membership_active: boolean;
+        };
+        Returns: string;
+      };
+      os_prepare_professional_identity_change: {
+        Args: { target_professional: string; new_email: string; justification: string };
+        Returns: undefined;
+      };
+      os_restore_professional_identity: {
+        Args: { target_professional: string; justification: string };
         Returns: undefined;
       };
       os_attachment_policy: {

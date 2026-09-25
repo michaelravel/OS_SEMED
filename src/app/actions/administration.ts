@@ -11,6 +11,12 @@ import {
 } from "@/lib/domain";
 import { session } from "@/lib/session";
 import { actionFailed, formText, requireAdministrator } from "./shared";
+import {
+  allowedGoogleDomains,
+  isAllowedGoogleEmail,
+  normalizeInstitutionalEmail,
+  professionalMembershipSchema,
+} from "@/lib/professional-identity";
 
 export async function saveCatalog(form: FormData) {
   const { db, admin } = await session();
@@ -111,6 +117,75 @@ export async function saveMembership(form: FormData) {
     }));
   }
   if (error) return actionFailed("/usuarios");
+  revalidatePath("/usuarios");
+  redirect("/usuarios");
+}
+
+export async function saveProfessionalMembership(form: FormData) {
+  const { db, admin } = await session();
+  requireAdministrator(admin);
+  const input = professionalMembershipSchema.safeParse({
+    ...Object.fromEntries(form),
+    id: formText(form, "id"),
+    professional_id: formText(form, "professional_id"),
+  });
+  if (!input.success) return actionFailed("/usuarios", "validation", "save_professional");
+  if (
+    input.data.email &&
+    !isAllowedGoogleEmail(input.data.email, allowedGoogleDomains())
+  ) return actionFailed("/usuarios", "validation", "save_professional_domain");
+
+  const { error } = await db.rpc("os_save_professional_membership", {
+    target_membership: input.data.id || null,
+    target_professional: input.data.professional_id || null,
+    professional_email: input.data.email,
+    professional_name: input.data.name,
+    professional_registration: input.data.registration,
+    professional_position: input.data.position,
+    target_unit: input.data.unit_id || null,
+    target_role: input.data.role,
+    professional_active: form.get("professional_active") === "on",
+    membership_active: form.get("membership_active") === "on",
+  });
+  if (error) return actionFailed("/usuarios", "unexpected", "save_professional");
+  revalidatePath("/usuarios");
+  redirect("/usuarios");
+}
+
+export async function prepareProfessionalIdentityChange(form: FormData) {
+  const { db, admin } = await session();
+  requireAdministrator(admin);
+  const input = z.object({
+    professional_id: z.uuid(),
+    new_email: z.email().max(fieldLimits.email).transform(normalizeInstitutionalEmail),
+    justification: z.string().trim().min(10).max(500),
+  }).safeParse(Object.fromEntries(form));
+  if (!input.success || !isAllowedGoogleEmail(input.data.new_email))
+    return actionFailed("/usuarios", "validation", "change_professional_identity");
+  const { error } = await db.rpc("os_prepare_professional_identity_change", {
+    target_professional: input.data.professional_id,
+    new_email: input.data.new_email,
+    justification: input.data.justification,
+  });
+  if (error) return actionFailed("/usuarios", "unexpected", "change_professional_identity");
+  revalidatePath("/usuarios");
+  redirect("/usuarios");
+}
+
+export async function restoreProfessionalIdentity(form: FormData) {
+  const { db, admin } = await session();
+  requireAdministrator(admin);
+  const input = z.object({
+    professional_id: z.uuid(),
+    justification: z.string().trim().min(10).max(500),
+  }).safeParse(Object.fromEntries(form));
+  if (!input.success)
+    return actionFailed("/usuarios", "validation", "restore_professional_identity");
+  const { error } = await db.rpc("os_restore_professional_identity", {
+    target_professional: input.data.professional_id,
+    justification: input.data.justification,
+  });
+  if (error) return actionFailed("/usuarios", "unexpected", "restore_professional_identity");
   revalidatePath("/usuarios");
   redirect("/usuarios");
 }

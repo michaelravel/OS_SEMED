@@ -1,6 +1,6 @@
 // Fachada estável das Server Actions. Os consumidores existentes podem manter
 // o mesmo import enquanto cada domínio evolui de forma independente.
-export { login, logout } from "./actions/auth";
+export { login, loginWithGoogle, logout } from "./actions/auth";
 export {
   addMessage,
   addServiceEntry,
@@ -22,4 +22,11 @@ export {
   waitForInformation,
 } from "./actions/orders";
 export { uploadAttachment } from "./actions/attachments";
-export { saveCatalog, saveMembership, saveUnit } from "./actions/administration";
+export {
+  prepareProfessionalIdentityChange,
+  restoreProfessionalIdentity,
+  saveCatalog,
+  saveMembership,
+  saveProfessionalMembership,
+  saveUnit,
+} from "./actions/administration";

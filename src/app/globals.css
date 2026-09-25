@@ -651,6 +651,42 @@ td small {
 .login-form form {
   margin: 32px 0 24px;
 }
+.login-form .google-login-form {
+  margin-bottom: 18px;
+}
+.google-login {
+  background: white;
+  color: #26354f;
+  border: 1px solid #b9c4d6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.google-login:hover {
+  background: #f5f8fc;
+}
+.google-login span {
+  color: #1a73e8;
+  font-size: 18px;
+  font-weight: 800;
+}
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: hsl(var(--muted));
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.login-divider::before,
+.login-divider::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: #d9e0eb;
+}
 .login-form button {
   width: 100%;
 }

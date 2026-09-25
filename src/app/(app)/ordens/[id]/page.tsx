@@ -148,24 +148,24 @@ export default async function OrderPage({
   const requesters = Array.from(
     new Map(
       membershipsForWorkflow
-        .filter((membership) => membership.role === roleNames.requester)
+        .filter((membership) => membership.role === roleNames.requester && membership.user_id)
         .map((membership) => [
           membership.user_id,
           {
-            id: membership.user_id,
-            name: profileName.get(membership.user_id) ?? "Solicitante",
+            id: membership.user_id!,
+            name: profileName.get(membership.user_id!) ?? "Solicitante",
           },
         ]),
     ).values(),
   );
   const responsibleMemberships = membershipsForWorkflow
-    .filter((membership) => membership.role === roleNames.responsible)
+    .filter((membership) => membership.role === roleNames.responsible && membership.user_id)
     .map(
       (membership): ResponsibleMembershipOption => ({
         id: membership.id,
-        user_id: membership.user_id,
+        user_id: membership.user_id!,
         unit_id: membership.unit_id,
-        name: `${profileName.get(membership.user_id) ?? "Responsável"} · ${unitName.get(membership.unit_id ?? "") ?? "Unidade não informada"}`,
+        name: `${profileName.get(membership.user_id!) ?? "Responsável"} · ${unitName.get(membership.unit_id ?? "") ?? "Unidade não informada"}`,
       }),
     );
   const workflowOperations = availableActions.data ?? [];
