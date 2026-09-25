@@ -726,10 +726,22 @@ test("migration e RLS isolam unidades, identidades, operações e anexos", async
       (
         await asUser(
           tech,
-          `select id from os_order_events where order_id='${orderA}'`,
+          `select id from os_order_events where order_id='${orderA}'
+           and (event_type is null or
+                event_type not in ('attachment_added','service_attachment_added'))`,
         )
       ).rows.length,
       4,
+    );
+    assert.equal(
+      (
+        await asUser(
+          tech,
+          `select id from os_order_events where order_id='${orderA}'
+           and event_type in ('attachment_added','service_attachment_added')`,
+        )
+      ).rows.length,
+      2,
     );
     await assert.rejects(
       asUser(

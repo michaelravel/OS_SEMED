@@ -201,6 +201,92 @@
 .service-timeline article:first-child {
   margin-top: 10px;
 }
+.functional-timeline > ol {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.functional-timeline > ol > li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 14px;
+  padding-bottom: 24px;
+}
+.functional-timeline > ol > li::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  bottom: -2px;
+  left: 5px;
+  width: 2px;
+  background: hsl(var(--border));
+}
+.functional-timeline > ol > li:last-child::before {
+  display: none;
+}
+.functional-timeline-marker {
+  position: relative;
+  z-index: 1;
+  width: 12px;
+  height: 12px;
+  margin-top: 4px;
+  border: 3px solid white;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  box-shadow: 0 0 0 2px hsl(var(--primary));
+}
+.functional-timeline article {
+  min-width: 0;
+  padding: 0 0 2px;
+}
+.functional-timeline-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+.functional-timeline-heading strong {
+  color: var(--navy);
+  font-size: 14px;
+}
+.functional-timeline-heading time {
+  color: hsl(var(--muted));
+  font-size: 11px;
+  white-space: nowrap;
+}
+.timeline-actor {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 7px 0 0;
+  color: hsl(var(--muted));
+  font-size: 11px;
+}
+.timeline-actor span + span::before {
+  content: "·";
+  margin-right: 6px;
+}
+.timeline-transition {
+  display: inline-block;
+  margin: 10px 0 0;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: #f2f5f9;
+  color: var(--navy);
+  font-size: 11px;
+  font-weight: 600;
+}
+.timeline-summary {
+  margin: 9px 0 0;
+  color: hsl(var(--foreground));
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.functional-timeline .pagination {
+  margin-top: 4px;
+}
 .details {
   display: grid;
   gap: 12px;
@@ -270,5 +356,10 @@
     left: 15px;
     width: 2px;
     height: calc(100% + 14px);
+  }
+  .functional-timeline-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
   }
 }

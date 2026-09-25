@@ -9,10 +9,12 @@ import { OrderWorkflowActions } from "@/components/order-details/order-workflow-
 import { OrderHeader } from "@/components/order-details/order-header";
 import { OrderCycle } from "@/components/order-details/order-cycle";
 import { OrderService } from "@/components/order-details/order-service";
+import { OrderTimeline } from "@/components/order-details/order-timeline";
 import { queryLimits } from "@/lib/application-config";
 import { roleNames, workflowActionNames } from "@/lib/domain";
 import { session } from "@/lib/session";
 import { ensureQueriesSucceeded, ensureQuerySucceeded } from "@/lib/errors";
+import { pageNumber, pageRange } from "@/lib/pagination";
 import type {
   OrderCatalog,
   OrderDetail,
@@ -24,10 +26,13 @@ export default async function OrderPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ erro?: string }>;
+  searchParams: Promise<{ erro?: string; page?: string }>;
 }) {
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
+  const query = await searchParams;
+  const timelinePage = pageNumber(query.page);
+  const timelineRange = pageRange(timelinePage);
 
   const { db, admin, user } = await session();
   const { data, error } = await db
@@ -47,7 +52,7 @@ export default async function OrderPage({
     units,
     profiles,
     catalogs,
-    events,
+    timeline,
     serviceEntries,
     availableActions,
     attachmentPolicies,
@@ -85,12 +90,11 @@ export default async function OrderPage({
       .eq("active", true)
       .order("name")
       .limit(queryLimits.lookupRows),
-    db
-      .from("os_order_events")
-      .select("id,from_status,to_status,reason,created_at")
-      .eq("order_id", id)
-      .order("created_at", { ascending: false })
-      .limit(queryLimits.detailRows),
+    db.rpc("os_order_timeline", {
+      target: id,
+      page_size: queryLimits.pageSize,
+      page_offset: timelineRange.from,
+    }),
     db
       .from("os_order_service_entries")
       .select("id,entry_type,description,serviced_at,created_at")
@@ -118,7 +122,7 @@ export default async function OrderPage({
       units,
       profiles,
       catalogs,
-      events,
+      timeline,
       serviceEntries,
       availableActions,
       attachmentPolicies,
@@ -169,7 +173,7 @@ export default async function OrderPage({
   return (
     <>
       <OrderHeader order={order} header={orderHeader.data?.[0]} />
-      <Notice error={(await searchParams).erro} />
+      <Notice error={query.erro} />
       <OrderCycle order={order} />
       <div className="detail-grid">
         <OrderSummary
@@ -200,6 +204,12 @@ export default async function OrderPage({
           ({ operation }) => operation === workflowActionNames.addServiceEntry,
         )}
       />
+      <OrderTimeline
+        orderId={id}
+        events={timeline.data ?? []}
+        page={timelinePage}
+        total={Number(timeline.data?.[0]?.total_count ?? 0)}
+      />
       {workflowOperations.some(
         ({ operation }) => operation === workflowActionNames.edit,
       ) && (
@@ -211,7 +221,6 @@ export default async function OrderPage({
       <OrderActivity
         id={id}
         userId={user.id}
-        events={events.data ?? []}
         messages={messages.data ?? []}
         canPost={canPost}
       />

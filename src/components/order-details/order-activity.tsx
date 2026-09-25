@@ -1,42 +1,21 @@
 import { addMessage } from "@/app/actions";
 import { date } from "@/components/ui";
 import { fieldLimits, queryLimits } from "@/lib/application-config";
-import type {
-  OrderEvent,
-  OrderMessage,
-} from "./types";
+import type { OrderMessage } from "./types";
 
 export function OrderActivity({
   id,
   userId,
-  events,
   messages,
   canPost,
 }: {
   id: string;
   userId: string;
-  events: OrderEvent[];
   messages: OrderMessage[];
   canPost: boolean;
 }) {
   return (
     <>
-      <section className="card">
-        <h2>Histórico de situações</h2>
-        <div className="timeline">
-          {events.map((event) => (
-            <article key={event.id}>
-              <strong>
-                {event.from_status
-                  ? `${event.from_status} → ${event.to_status}`
-                  : event.to_status}
-              </strong>
-              <small>{date(event.created_at)}</small>
-              {event.reason && <p>{event.reason}</p>}
-            </article>
-          ))}
-        </div>
-      </section>
       <section className="card">
         <p className="eyebrow">COMUNICAÇÃO</p>
         <h2>Mensagens da ordem</h2>

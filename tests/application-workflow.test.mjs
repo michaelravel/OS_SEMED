@@ -39,6 +39,10 @@ const activityUi = await fs.readFile(
   new URL("../src/components/order-details/order-activity.tsx", import.meta.url),
   "utf8",
 );
+const timelineUi = await fs.readFile(
+  new URL("../src/components/order-details/order-timeline.tsx", import.meta.url),
+  "utf8",
+);
 
 test("Server Actions usam uma RPC específica e tratamento seguro por operação", () => {
   const contracts = [
@@ -115,4 +119,9 @@ test("detalhe apresenta cabeçalho, ciclo e separa atendimento de comunicação"
   );
   assert.ok(activityUi.includes("COMUNICAÇÃO"));
   assert.ok(!activityUi.includes("serviceEntries"));
+  assert.ok(timelineUi.includes("Histórico funcional"));
+  assert.ok(timelineUi.includes("Pagination"));
+  assert.ok(!timelineUi.includes("metadata"));
+  assert.ok(!timelineUi.includes("delete"));
+  assert.ok(!timelineUi.includes("update"));
 });

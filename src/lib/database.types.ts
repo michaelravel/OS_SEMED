@@ -217,6 +217,21 @@ export type Database = {
           responsible_name: string | null;
         }[];
       };
+      os_order_timeline: {
+        Args: { target: string; page_size: number; page_offset: number };
+        Returns: {
+          event_id: number;
+          event_type: string | null;
+          created_at: string;
+          actor_name: string;
+          actor_role: string | null;
+          actor_unit_name: string | null;
+          summary: string | null;
+          from_status: string | null;
+          to_status: string;
+          total_count: number;
+        }[];
+      };
       os_assign_order: {
         Args:
           | {

@@ -40,10 +40,8 @@ export type OrderAttachment = Pick<
   Database["public"]["Tables"]["os_attachments"]["Row"],
   "id" | "name" | "size_bytes"
 >;
-export type OrderEvent = Pick<
-  Database["public"]["Tables"]["os_order_events"]["Row"],
-  "id" | "from_status" | "to_status" | "reason" | "created_at"
->;
+export type OrderTimelineEvent =
+  Database["public"]["Functions"]["os_order_timeline"]["Returns"][number];
 export type OrderServiceEntryView = Pick<
   Database["public"]["Tables"]["os_order_service_entries"]["Row"],
   "id" | "entry_type" | "description" | "serviced_at" | "created_at"

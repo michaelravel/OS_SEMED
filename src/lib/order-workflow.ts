@@ -119,6 +119,7 @@ export const orderOperationNames = {
   cancel: "cancel",
   reopen: "reopen",
   edit: "edit",
+  attachment: "attachment",
 } as const;
 export const orderOperations = [
   orderOperationNames.open,
@@ -137,6 +138,7 @@ export const orderOperations = [
   orderOperationNames.cancel,
   orderOperationNames.reopen,
   orderOperationNames.edit,
+  orderOperationNames.attachment,
 ] as const;
 export type OrderOperation = (typeof orderOperations)[number];
 

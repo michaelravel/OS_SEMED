@@ -341,6 +341,48 @@ test("RLS do novo fluxo separa origem, execução, autoria e dados internos", as
       ),
       1,
     );
+
+    const requesterTimeline = (
+      await asUser(
+        users.requester,
+        `select event_type,actor_name,actor_role,actor_unit_name,summary
+         from os_order_timeline('${order}',100,0)`,
+      )
+    ).rows;
+    assert.ok(requesterTimeline.some((event) => event.event_type === "order_opened"));
+    assert.ok(requesterTimeline.some((event) => event.event_type === "attachment_added"));
+    assert.ok(!requesterTimeline.some((event) => event.event_type === "service_entry_added"));
+    assert.ok(!requesterTimeline.some((event) => event.event_type === "service_attachment_added"));
+    assert.ok(
+      requesterTimeline.every((event) =>
+        ["Você", "Equipe da OS", "Importação / sistema"].includes(event.actor_name),
+      ),
+    );
+    assert.ok(
+      requesterTimeline
+        .filter((event) => event.actor_name === "Equipe da OS")
+        .every((event) => event.actor_role === null && event.actor_unit_name === null),
+    );
+
+    const managerTimeline = (
+      await asUser(
+        users.originManager,
+        `select event_type,actor_name,summary,total_count
+         from os_order_timeline('${order}',100,0)`,
+      )
+    ).rows;
+    assert.ok(managerTimeline.some((event) => event.event_type === "service_entry_added"));
+    assert.ok(managerTimeline.some((event) => event.event_type === "service_attachment_added"));
+    assert.equal(Number(managerTimeline[0].total_count), managerTimeline.length);
+    assert.equal(
+      (
+        await asUser(
+          users.outsider,
+          `select * from os_order_timeline('${order}',25,0)`,
+        )
+      ).rows.length,
+      0,
+    );
     assert.equal(
       await countAs(
         users.originManager,
@@ -424,6 +466,7 @@ test("RLS do novo fluxo separa origem, execução, autoria e dados internos", as
       asAnon(`select os_order_can_collaborate('${order}')`),
     );
     await assert.rejects(asAnon(`select * from os_order_header('${order}')`));
+    await assert.rejects(asAnon(`select * from os_order_timeline('${order}',25,0)`));
   } finally {
     await db.close();
   }
