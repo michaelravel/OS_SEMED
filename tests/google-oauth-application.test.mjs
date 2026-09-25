@@ -17,11 +17,12 @@ test("login inicia Google OAuth pelo Supabase com callback PKCE server-side", ()
   assert.match(callback, /auth\.getUser\(\)/);
 });
 
-test("callback valida Google, domínio e associação transacional antes do painel", () => {
+test("callback valida Google, domínio e associação antes do destino autorizado", () => {
   assert.match(callback, /identity\.provider === "google"/);
   assert.match(callback, /isAllowedGoogleEmail/);
   assert.match(callback, /os_claim_professional_identity/);
   assert.match(callback, /signOut/);
+  assert.match(callback, /resolveFirstAuthorizedRoute/);
 });
 
 test("interface preserva senha legada e remove UUID do fluxo administrativo novo", () => {

@@ -5,6 +5,7 @@ import {
   isAllowedGoogleEmail,
 } from "@/lib/professional-identity";
 import { logServerEvent } from "@/lib/observability";
+import { resolveFirstAuthorizedRoute } from "@/lib/authorization";
 
 const safeResults: Record<string, string> = {
   not_registered: "nao-cadastrado",
@@ -66,5 +67,6 @@ export async function GET(request: Request) {
   }
   if (result.active_memberships < 1)
     return NextResponse.redirect(new URL("/sem-acesso", request.url), 303);
-  return NextResponse.redirect(new URL("/painel", request.url), 303);
+  const destination = await resolveFirstAuthorizedRoute(db);
+  return NextResponse.redirect(new URL(destination, request.url), 303);
 }

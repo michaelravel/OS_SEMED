@@ -6,6 +6,7 @@ import { configured, supabase } from "@/lib/supabase";
 import { fieldLimits } from "@/lib/application-config";
 import { actionFailed } from "./shared";
 import { allowedGoogleDomains } from "@/lib/professional-identity";
+import { resolveFirstAuthorizedRoute } from "@/lib/authorization";
 
 async function applicationOrigin() {
   const configuredOrigin = process.env.NEXT_PUBLIC_APP_URL?.trim();
@@ -50,7 +51,7 @@ export async function login(form: FormData) {
   const db = await supabase();
   const { error } = await db.auth.signInWithPassword(input.data);
   if (error) return actionFailed("/login");
-  redirect("/painel");
+  redirect(await resolveFirstAuthorizedRoute(db));
 }
 
 export async function logout() {

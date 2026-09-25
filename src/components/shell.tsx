@@ -13,13 +13,16 @@ import {
   Settings,
   LogOut,
   Menu,
-  Plus,
   ShieldCheck,
   KeyRound,
 } from "lucide-react";
 import { logout } from "@/app/actions";
 import type { PermissionKey } from "@/lib/authorization-core";
-import { visibleNavigationItems } from "@/lib/navigation";
+import {
+  firstAuthorizedRoute,
+  navigationContext,
+  visibleNavigationItems,
+} from "@/lib/navigation";
 
 const icons = {
   dashboard: LayoutDashboard,
@@ -38,23 +41,42 @@ export function Shell({
   children,
   name,
   admin,
-  canCreate,
   permissions,
 }: {
   children: React.ReactNode;
   name: string;
   admin: boolean;
-  canCreate: boolean;
   permissions: PermissionKey[];
 }) {
   const path = usePathname();
   const [open, setOpen] = useState(false);
   const visible = visibleNavigationItems(new Set(permissions), admin);
   const mainLinks = visible.filter((item) => item.section === "main");
+  const catalogLinks = visible.filter((item) => item.section === "catalogs");
   const administrationLinks = visible.filter(
     (item) => item.section === "administration",
   );
-  const homeHref = mainLinks[0]?.href ?? "/sem-acesso";
+  const homeHref = firstAuthorizedRoute(new Set(permissions), admin);
+  const context = navigationContext(path);
+  const navigationLink = (item: (typeof visible)[number]) => {
+    const Icon = icons[item.id];
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        onClick={() => setOpen(false)}
+        aria-current={path === item.href ? "page" : undefined}
+        className={
+          path === item.href || path.startsWith(`${item.href}/`)
+            ? "selected"
+            : ""
+        }
+      >
+        <Icon size={18} />
+        {item.label}
+      </Link>
+    );
+  };
   return (
     <div className="app-shell">
       <a className="skip" href="#conteudo">
@@ -75,38 +97,17 @@ export function Shell({
           OS SEMED <span>ORDENS DE SERVIÇO</span>
         </div>
         <nav aria-label="Menu principal">
-          {mainLinks.map((item) => {
-            const Icon = icons[item.id];
-            return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setOpen(false)}
-              aria-current={path === item.href ? "page" : undefined}
-              className={path.startsWith(item.href) ? "selected" : ""}
-            >
-              <Icon size={18} />
-              {item.label}
-            </Link>
-            );
-          })}
+          {mainLinks.map(navigationLink)}
+          {catalogLinks.length > 0 && (
+            <>
+              <p className="nav-label">CADASTROS</p>
+              {catalogLinks.map(navigationLink)}
+            </>
+          )}
           {administrationLinks.length > 0 && (
             <>
               <p className="nav-label">ADMINISTRAÇÃO</p>
-              {administrationLinks.map((item) => {
-                const Icon = icons[item.id];
-                return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setOpen(false)}
-                  className={path === item.href ? "selected" : ""}
-                >
-                  <Icon size={18} />
-                  {item.label}
-                </Link>
-                );
-              })}
+              {administrationLinks.map(navigationLink)}
             </>
           )}
         </nav>
@@ -129,7 +130,7 @@ export function Shell({
               <Menu size={20} />
             </button>
             <div>
-              <strong>Painel administrativo</strong>
+              <strong>{context.title}</strong>
               <small>OS SEMED · Gestão de serviços</small>
             </div>
           </div>
@@ -143,14 +144,20 @@ export function Shell({
           </div>
         </header>
         <main id="conteudo" className="main-content">
-          <div className="breadcrumb">
-            <span>SEMED / Ordens de serviço</span>
-            {canCreate && (
-              <Link className="button small" href="/ordens/nova">
-                <Plus size={16} /> Nova OS
-              </Link>
-            )}
-          </div>
+          <nav className="breadcrumb" aria-label="Navegação estrutural">
+            <ol>
+              {context.breadcrumbs.map((item, index) => (
+                <li key={`${item.label}-${index}`}>
+                  {index > 0 && <span aria-hidden="true">/</span>}
+                  {item.href ? (
+                    <Link href={item.href}>{item.label}</Link>
+                  ) : (
+                    item.label
+                  )}
+                </li>
+              ))}
+            </ol>
+          </nav>
           {children}
         </main>
       </div>

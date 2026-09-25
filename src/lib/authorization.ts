@@ -7,6 +7,7 @@ import {
   isPermissionKey,
   type PermissionKey,
 } from "./authorization-core";
+import { firstAuthorizedRoute } from "./navigation";
 
 export type AuthorizationClient = Awaited<ReturnType<typeof supabase>>;
 
@@ -67,4 +68,31 @@ export async function requirePagePermission(
   client?: AuthorizationClient,
 ) {
   if (!(await hasPermission(permission, client))) redirect("/sem-acesso");
+}
+
+export async function resolveFirstAuthorizedRoute(
+  client?: AuthorizationClient,
+  knownAdministrator?: boolean,
+) {
+  const db = await authorizationClient(client);
+  const permissions = await getUserPermissions(db);
+  let administrator = knownAdministrator;
+  if (administrator === undefined) {
+    const { data, error } = await db
+      .from("os_memberships")
+      .select("role,unit_id,active")
+      .eq("active", true);
+    if (error)
+      throw new ServerOperationError(
+        "MEMBERSHIP_QUERY_FAILED",
+        "Não foi possível verificar os vínculos.",
+      );
+    administrator = (data ?? []).some(
+      (membership) =>
+        membership.active &&
+        membership.role === "admin" &&
+        membership.unit_id === null,
+    );
+  }
+  return firstAuthorizedRoute(permissions, administrator);
 }

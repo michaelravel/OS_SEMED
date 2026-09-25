@@ -15,8 +15,9 @@ import {
   type OrderSearchParams,
 } from "@/lib/order-search";
 import { session } from "@/lib/session";
-import { requirePagePermission } from "@/lib/authorization";
+import { getUserPermissions, requirePagePermission } from "@/lib/authorization";
 import { routePermissions } from "@/lib/authorization-policy";
+import { Plus } from "lucide-react";
 
 export default async function Orders({
   searchParams,
@@ -26,6 +27,8 @@ export default async function Orders({
   const parsed = parseOrderSearchParams(await searchParams);
   const { db } = await session();
   await requirePagePermission(routePermissions.orders, db);
+  const permissions = await getUserPermissions(db);
+  const canCreateOrder = permissions.has(routePermissions.newOrder);
   const [orders, filterOptions] = await Promise.all([
     db.rpc("os_search_orders", {
       ...parsed.args,
@@ -53,10 +56,17 @@ export default async function Orders({
 
   return (
     <>
-      <Heading
-        title="Ordens de serviço"
-        description="Consulte e acompanhe as solicitações da rede."
-      />
+      <div className="page-heading-actions">
+        <Heading
+          title="Ordens de serviço"
+          description="Consulte e acompanhe as solicitações da rede."
+        />
+        {canCreateOrder && (
+          <Link className="button small" href="/ordens/nova">
+            <Plus size={16} /> Nova OS
+          </Link>
+        )}
+      </div>
       <OrderFilters
         values={parsed.values}
         options={(filterOptions.data ?? []) as OrderFilterOption[]}

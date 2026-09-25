@@ -5,7 +5,7 @@ export default function NotFound() {
       <section className="access-card">
         <h1>Registro não encontrado</h1>
         <p>O registro não existe ou não está disponível para seu vínculo.</p>
-        <Link href="/painel">Voltar ao painel</Link>
+        <Link href="/">Voltar ao início</Link>
       </section>
     </main>
   );
